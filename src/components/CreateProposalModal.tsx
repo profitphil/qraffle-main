@@ -13,10 +13,79 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSubmitTokenRaffleProposal } from "@/hooks/useSubmitTokenRaffleProposal";
 import { useQubicConnect } from "@/components/connect/QubicConnectContext";
 import ConfirmationModal from "@/components/ConfirmationModal";
-import { assetNameConvert, truncateMiddle } from "@/utils";
+import { truncateMiddle } from "@/utils";
+
+const normalizeIdentity = (value: string | null | undefined) => value?.replace(/\0/g, "").trim().toUpperCase() || "";
+const normalizeAssetName = (value: string | null | undefined) => value?.replace(/\0/g, "").trim().toUpperCase() || "";
+
+const ASSET_ISSUER_CSV = `AETHER,PJTNSCBQNTCDIBUMQCMUZMWQERABDDMKKLFFVDWWYBAEKQTUCJKXBYADRQZA
+AGI,LUCRKUDTXONGDELVTZJUMKQUXVVCXVRKMIVTEGLFGGZGHVCHYGKZVGFGUEJA
+AIGARTH,PXMARASAWVLRUABZZOXQYOWAJLMBULKABAPAEXDVECDFPFZJMAMTLTQAQQLG
+ANNA,HIFUSWQYNUZTSDRPXZOXXIWUPWTAOVJUTCVLFIHLHARCXSARRTGCJLGGAREO
+ARK,ARKMGCWFYEHJFAVSGKEXVWBGGXZAVLZNBDNBZEXTQBKLKRPEYPEIEKFHUPNG
+BITE,BITEOFQIWBJXQDVLDFRXYJGYNHGAXVBTCYDIMDLLECFFBEUOMOYKENNBXJCB
+BURNER,BIWLXVCUXYLOQDANJVESJVABISGCNURGYTXMEJTCHBBOEMNZUJQKPPECMBDO
+CAVIX,OLDZGVBURUJVZBSTWEBJGEPZNRDBTZMCNDVRBZEXBDYEKCJEYZQTDGLARWUO
+CFB,CFBMEMZOIDEXQAUXYYSZIURADQLAPWPMNJXQSNVQZAHYVOPYUKKJBJUCTVJL
+CODED,CODEDCGWIUUJJBHTXYQWAOKVKJMDBXHOKMNDVAHDUEDNSQKVYYJGLSDAYKHG
+ENIGMA,SHRCVUQRMEVVIETHZZHUKOZJLHVBRZQYNPNWNHWZYCJNOMROJZWHXNWEXWEI
+EXODUS,HASVHXZKVIHTFHEZUSZIIBPZFVHAGTANVXHBJNHMWCRQZYKULCUBLCTBPONO
+FIXED,JSBLFIQGNWZALASSAHSTTCWUIKTACXHEPOMFQKQLQGUIQTSRAEYJZULEULTL
+GARTH,PHOENIXCLQOBHDZCHJOCKCPZVTKALQBMXYOEDBUHSDCJRMTUCUBPLSUFNBIE
+GENESIS,POCCZYCKTRQGHFIPWGSBLJTEQFDDVVBMNUHNCKMRACBGQOPBLURNRCBAFOBD
+GRONK,ENTUBOJZTOCGVAKTSWSJIJWREQPCZBZTHDNXAYZBSEJGQREPPXZISWWGYTEG
+HOME,MLLJLIRDKFAGJHUPTXKULZAMYGSDKTVZJBQICVZPKAAMJZEDCBPGSUJFZGMN
+HOTEL1,OKYGZNAJGYHRXEUPJCQMOAYEPDVBGPQLDHYIXCDAXBJYMDNFMBKCIXIDNRZK
+MATILDA,ZWQHZOEAWYKSGDPWWAQBAOKECCSASFCMLYZOJGBXNABXVZJZXKXOWRTFIQHC
+PEPE,PEPELZBBACBJYFZRKGSOVDUWJURCDSKPNFAMXYZTQBGPAVJNTOVGSIBGTQWN
+PORTAL,IQUGNVFDQSLTXFJSIOPPNPZINSCDQTJVJWGRPWRTFFXMXSJIAASXOBFFBERK
+PUNKS,LUOBHDKFNKJWPDRLDGIEBMZWUXYBWSQEPXAZBGHRMAGELHYDOWAFMLGFUXUC
+QCAP,QCAPWMYRSHLBJHSTTZQVCIBARVOASKDENASAKNOBRGPFWWKRCUVUAXYEZVOG
+QCITY,CITYVPGKBCGXMETAEXELTJUNRMTCQRVXEKBIHNPXGFSZXVWEPIXICLHGVQGL
+QCORE,NXKSLZWWMMNCACIVXRUEVWISCOYCYMTVJXVOITXKQGORXCEZVUDAFEMDURLF
+QDOGE,QDOGEEESKYPAICECHEAHOXPULEOADTKGEJHAVYPFKHLEWGXXZQUGIGMBUTZE
+QFOF,MBMOAANNZZIXHHFBYWEHUOUBISPCUPCJKIUWWZWNCBTCWRUVKRBEVFUFSNKD
+QFRONT,ZROTZCHXDSSHFFEYDZPZNUXBUJLDHWHPBKNHEBADLARYDGHPOCTRAZYBCPPK
+QFT,TFUYVBXYIYBVTEMJHAJGEJOOZHJBQFVQLTBBKMEHPEVIZFXZRPEYFUWGTIWG
+QGOLD,QGRNNKNCTTKVBAACUANWEGRXGPGDOHXYZNMKGEUZSEXBNBBWUBJHAGDGWCSH
+QHEART,SSGXSLSXFEJOOBTZWVDSRCEFGXNDYUVDXMQALXLBXGDCRXTKFZIOTGZFUNXO
+QMINE,QMINEQQXYBEGBHNSUPOUYDIQKZPCBPQIIHUUZMCPLBPCCAIARVZBTYKGFCWM
+QSILVER,EQZIDZELUKGHICLIEXLBMBMXRNPCXGEAZCGGSQCOFBRJJUOKUWBXDEZBGNKJ
+QSMILE,LPWZCSEFJHYWFDTGVIFONWDHUGQBOPELDDNFDXYPMBVHFJFVZPLDBAFAOIJA
+QST,QMHJNLMQRIBIREFIWVKYQELBFARBTDNYKIOBOFFYFGJYZSXJBVGBSUQGHSAM
+QTC,YCNPBGPGMJYCWGBJKQWLNRNKKJMBKQORLRKOSFUOWAWNXJHBLGTGFRRELGEK
+QTREAT,QDOGEEESKYPAICECHEAHOXPULEOADTKGEJHAVYPFKHLEWGXXZQUGIGMBUTZE
+QUFC,UFCDHPDCLQOKLDUXWCRSDFPFWWSCELTUKDNINURNUFXEIAZRZXQBRCRCSYCN
+QVERSAL,PXJSXWCPWKQGGHXHROMBLUCHJHLBOAHOKUCMJTUQXERSOMTPKRPQYOYBHUHO
+QXMR,QXMRTKAIIGLUREPIQPCMHCKWSIPDTUYFCFNYXQLTECSUJVYEMMDELBMDOEYB
+QXTRADE,QXTRMABNAJWNQBKYYNUNVYAJAQMDLIKOFXNGTRVYRDQMNZNNMZDGBDNGYMRM
+SATOSHI,WZEQKJXIWECRGHSRJJDRGFREYMBCTKQGPWEYGLQMPGMKNRZNCZGPFGMCGANI
+SMRT,ARKMGCWFYEHJFAVSGKEXVWBGGXZAVLZNBDNBZEXTQBKLKRPEYPEIEKFHUPNG
+STATSY,MLLJLIRDKFAGJHUPTXKULZAMYGSDKTVZJBQICVZPKAAMJZEDCBPGSUJFZGMN
+VIP,VDQOPFTANWHKGDTCLRHMMUNTTSCAOJFHTWPDYZPAVFTZGCCDIWQBYRQGIXCD
+WP,MLMWPSQNVAIBRFDHWCKSFOVUAZDDWKJGCLRSYZIUEFDURPWIPQXACYOEPMLB`;
+
+type AssetIssuerOption = {
+  asset: string;
+  issuer: string;
+};
+
+const ASSET_ISSUER_OPTIONS: AssetIssuerOption[] = ASSET_ISSUER_CSV.trim()
+  .split("\n")
+  .map((line) => {
+    const [asset, issuer] = line.split(",");
+    return {
+      asset: normalizeAssetName(asset),
+      issuer: normalizeIdentity(issuer),
+    };
+  })
+  .filter((option) => option.asset && option.issuer);
+
+const ASSET_TO_ISSUER = new Map(ASSET_ISSUER_OPTIONS.map((option) => [option.asset, option.issuer]));
 
 interface CreateProposalModalProps {
   open: boolean;
@@ -44,11 +113,19 @@ const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ open, onOpenC
     setShowConfirmation(false);
 
     try {
-      await handleSubmitProposal(issuer.trim(), assetNameConvert(assetName) as number, parseInt(entryAmount));
-      setIssuer("");
-      setAssetName("");
-      setEntryAmount("");
-      onOpenChange(false);
+      const normalizedIssuer = normalizeIdentity(issuer);
+
+      const submitted = await handleSubmitProposal(
+        normalizedIssuer,
+        assetName,
+        parseInt(entryAmount),
+      );
+      if (submitted) {
+        setIssuer("");
+        setAssetName("");
+        setEntryAmount("");
+        onOpenChange(false);
+      }
     } catch (error) {
       console.error("Failed to submit proposal:", error);
     } finally {
@@ -58,12 +135,11 @@ const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ open, onOpenC
 
   const isValidIssuer = (issuer: string) => {
     // Basic validation for Qubic identity format
-    return issuer.length === 60 && /^[A-Za-z0-9]+$/.test(issuer);
+    return issuer.length >= 60 && /^[A-Za-z0-9]+$/.test(issuer);
   };
 
   const isValidAssetName = (assetName: string) => {
-    const num = assetNameConvert(assetName) as number;
-    return !isNaN(num) && num > 0 && assetName.length <= 8;
+    return ASSET_TO_ISSUER.has(normalizeAssetName(assetName));
   };
 
   const isValidEntryAmount = (entryAmount: string) => {
@@ -71,8 +147,25 @@ const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ open, onOpenC
     return !isNaN(num) && num > 0;
   };
 
-  const isFormValid =
-    isValidIssuer(issuer) && isValidAssetName(assetName) && isValidEntryAmount(entryAmount) && !isSubmitting;
+  const handleAssetChange = (nextAsset: string) => {
+    const normalizedAsset = normalizeAssetName(nextAsset);
+    const mappedIssuer = ASSET_TO_ISSUER.get(normalizedAsset) || "";
+    setAssetName(normalizedAsset);
+    setIssuer(mappedIssuer);
+  };
+
+  const formatWithCommas = (value: string) => {
+    if (!value) return "";
+    return value.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
+
+  const handleEntryAmountChange = (value: string) => {
+    const digitsOnly = value.replace(/\D/g, "");
+    const normalizedDigits = digitsOnly.replace(/^0+(?=\d)/, "");
+    setEntryAmount(normalizedDigits);
+  };
+
+  const isFormValid = isValidIssuer(issuer) && isValidAssetName(assetName) && isValidEntryAmount(entryAmount) && !isSubmitting;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -92,6 +185,44 @@ const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ open, onOpenC
         <form onSubmit={handleSubmit} className="space-y-6 p-6 pt-0">
           <div className="space-y-4">
             <div className="space-y-2">
+              <Label htmlFor="assetName" className="text-sm font-semibold">
+                Asset Name
+              </Label>
+              <Select value={assetName} onValueChange={handleAssetChange}>
+                <SelectTrigger id="assetName" className="h-10 w-full text-base font-medium">
+                  <SelectValue placeholder="Select asset name..." />
+                </SelectTrigger>
+                <SelectContent className="border-border max-h-72 bg-card text-card-foreground shadow-xl">
+                  {ASSET_ISSUER_OPTIONS.map((option) => (
+                    <SelectItem key={option.asset} value={option.asset} className="bg-card text-card-foreground">
+                      {option.asset}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {assetName && !isValidAssetName(assetName) && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-destructive flex items-center space-x-2 text-sm"
+                >
+                  <AlertCircle className="h-4 w-4" />
+                  <span>Please choose a valid asset from the list</span>
+                </motion.div>
+              )}
+              {assetName && isValidAssetName(assetName) && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-success flex items-center space-x-2 text-sm"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  <span>Selected asset: {assetName}</span>
+                </motion.div>
+              )}
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="issuer" className="text-sm font-semibold">
                 Token Issuer ID
               </Label>
@@ -100,12 +231,11 @@ const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ open, onOpenC
                   id="issuer"
                   type="text"
                   value={issuer}
-                  onChange={(e) => setIssuer(e.target.value)}
-                  placeholder="Enter 60-character issuer ID..."
+                  readOnly
+                  placeholder="Auto-filled from selected asset"
                   className={`h-10 pr-10 text-base font-medium ${
                     issuer && !isValidIssuer(issuer) ? "border-destructive" : ""
                   }`}
-                  maxLength={60}
                 />
                 <div className="absolute top-1/2 right-3 -translate-y-1/2">
                   <User className="text-muted-foreground h-4 w-4" />
@@ -134,62 +264,20 @@ const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ open, onOpenC
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="assetName" className="text-sm font-semibold">
-                Asset Name
-              </Label>
-              <div className="relative">
-                <Input
-                  id="assetName"
-                  type="string"
-                  value={assetName}
-                  onChange={(e) => setAssetName(e.target.value.toUpperCase())}
-                  placeholder="Enter asset name (e.g., STATSY)..."
-                  className={`h-10 pr-10 text-base font-medium uppercase ${
-                    assetName && !isValidAssetName(assetName) ? "border-destructive" : ""
-                  }`}
-                  min="1"
-                />
-                <div className="absolute top-1/2 right-3 -translate-y-1/2">
-                  <Coins className="text-muted-foreground h-4 w-4" />
-                </div>
-              </div>
-              {assetName && !isValidAssetName(assetName) && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-destructive flex items-center space-x-2 text-sm"
-                >
-                  <AlertCircle className="h-4 w-4" />
-                  <span>Asset name must be a positive number</span>
-                </motion.div>
-              )}
-              {assetName && isValidAssetName(assetName) && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-success flex items-center space-x-2 text-sm"
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  <span>Valid asset name</span>
-                </motion.div>
-              )}
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="entryAmount" className="text-sm font-semibold">
                 Entry Amount ({assetName})
               </Label>
               <div className="relative">
                 <Input
                   id="entryAmount"
-                  type="number"
-                  value={entryAmount}
-                  onChange={(e) => setEntryAmount(e.target.value)}
+                  type="text"
+                  inputMode="numeric"
+                  value={formatWithCommas(entryAmount)}
+                  onChange={(e) => handleEntryAmountChange(e.target.value)}
                   placeholder={`Enter entry amount in ${assetName}...`}
                   className={`h-10 pr-10 text-base font-medium ${
                     entryAmount && !isValidEntryAmount(entryAmount) ? "border-destructive" : ""
                   }`}
-                  min="1"
                 />
                 <div className="absolute top-1/2 right-3 -translate-y-1/2">
                   <Coins className="text-muted-foreground h-4 w-4" />
@@ -227,8 +315,8 @@ const CreateProposalModal: React.FC<CreateProposalModalProps> = ({ open, onOpenC
                   <li>• Proposals will be voted on by registered DAO members</li>
                   <li>• Approved proposals become token raffles in the next epoch</li>
                   <li>• You must be registered in the DAO to submit proposals</li>
-                  <li>• Issuer ID must be exactly 60 characters long</li>
-                  <li>• Asset name will be automatically converted to uppercase</li>
+                  <li>• Choose asset names from the provided list</li>
+                  <li>• Token issuer ID is auto-filled from selected asset</li>
                   <li>• Entry amount is the cost to participate in the token raffle</li>
                 </ul>
               </div>

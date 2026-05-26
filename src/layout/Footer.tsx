@@ -92,7 +92,7 @@ const Footer: React.FC = () => {
               </div>
               <div className="flex items-center space-x-2">
                 <Zap className="text-warning-40 h-4 w-4" />
-                <span className="text-muted-foreground">10% Token Burns</span>
+                <span className="text-muted-foreground">5% Token Burns</span>
               </div>
               <div className="text-muted-foreground">
                 Building a sustainable

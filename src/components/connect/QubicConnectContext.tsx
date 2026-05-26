@@ -51,11 +51,112 @@ export function QubicConnectProvider({ children }: QubicConnectProviderProps) {
 
   const qHelper = new QubicHelper();
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const WALLETCONNECT_SIGN_TIMEOUT_MS = 120000;
+
+  const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+      });
+
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
+  };
+
+  const withVisibilityAwareTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return await withTimeout(promise, timeoutMs, message);
+    }
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let remainingMs = timeoutMs;
+    let lastStartedAt = 0;
+    let settled = false;
+    let rejectTimeout: ((reason?: unknown) => void) | null = null;
+
+    const isHidden = () => document.visibilityState === "hidden";
+
+    const clearTimer = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    };
+
+    const pauseTimer = () => {
+      if (!timeoutId) return;
+      remainingMs -= Date.now() - lastStartedAt;
+      clearTimer();
+    };
+
+    const fail = () => {
+      if (settled) return;
+      settled = true;
+      rejectTimeout?.(new Error(message));
+    };
+
+    const startTimer = () => {
+      if (settled || isHidden() || timeoutId) return;
+      if (remainingMs <= 0) {
+        fail();
+        return;
+      }
+      lastStartedAt = Date.now();
+      timeoutId = setTimeout(fail, remainingMs);
+    };
+
+    const handleVisibilityChange = () => {
+      if (isHidden()) {
+        pauseTimer();
+      } else {
+        startTimer();
+      }
+    };
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      rejectTimeout = reject;
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      window.addEventListener("focus", handleVisibilityChange);
+      window.addEventListener("pageshow", handleVisibilityChange);
+      window.addEventListener("pagehide", pauseTimer);
+      startTimer();
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      settled = true;
+      clearTimer();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleVisibilityChange);
+      window.removeEventListener("pageshow", handleVisibilityChange);
+      window.removeEventListener("pagehide", pauseTimer);
+    }
+  };
+
   const isRateLimitError = (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     return /rate limit|429|failed to get current tick|tick value is expired|tick value is already in the past|expired|already in the past/i.test(
       message,
     );
+  };
+
+  const isRetryableWalletConnectSignError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    return (
+      isRateLimitError(error) || /timed out|timeout|request expired|session expired|session not found|network error/i.test(message)
+    );
+  };
+
+  const isWalletConnectTimeoutError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    return /timed out|timeout/i.test(message);
   };
 
   const connect = (wallet: Wallet): void => {
@@ -138,7 +239,7 @@ export function QubicConnectProvider({ children }: QubicConnectProviderProps) {
         const payloadBase64 = uint8ArrayToBase64(decodedTx.payload.getPackageData());
         let signToastId: string | number | undefined;
         if (wallet?.connectType == "walletconnect") {
-          signToastId = toast.loading("Sign the transaction in your wallet", {
+          signToastId = toast.loading("Sign in your wallet, then return here", {
             icon: "🔑",
           });
         }
@@ -148,20 +249,24 @@ export function QubicConnectProvider({ children }: QubicConnectProviderProps) {
                 signedTransaction: string;
               }
             | undefined;
-          const maxSignAttempts = 4;
+          const maxSignAttempts = 2;
           for (let attempt = 1; attempt <= maxSignAttempts; attempt++) {
             try {
-              wcResult = await signTransaction({
-                from,
-                to,
-                amount: Number(decodedTx.amount.getNumber()),
-                tick: decodedTx.tick,
-                inputType: decodedTx.inputType,
-                payload: payloadBase64 == "" ? null : payloadBase64,
-              });
+              wcResult = await withVisibilityAwareTimeout(
+                signTransaction({
+                  from,
+                  to,
+                  amount: Number(decodedTx.amount.getNumber()),
+                  tick: decodedTx.tick,
+                  inputType: decodedTx.inputType,
+                  payload: payloadBase64 == "" ? null : payloadBase64,
+                }),
+                WALLETCONNECT_SIGN_TIMEOUT_MS,
+                "Wallet signing timed out. Return to this browser after approving in your wallet, then try again.",
+              );
               break;
             } catch (error) {
-              const retryable = isRateLimitError(error);
+              const retryable = !isWalletConnectTimeoutError(error) && isRetryableWalletConnectSignError(error);
               if (!retryable || attempt === maxSignAttempts) {
                 throw error;
               }

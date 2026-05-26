@@ -45,7 +45,7 @@ const Home: React.FC = () => {
     },
     featureList: [
       "Provably fair raffles with transparent winner selection",
-      "Automatic token burning (10% of proceeds)",
+      "Automatic token burning (5% of proceeds)",
       "DAO governance system",
       "Charity donations (1% of proceeds)",
       "Revenue sharing with registered members",
@@ -211,7 +211,7 @@ const Home: React.FC = () => {
                   </div>
                   <h3 className="mb-2 font-semibold">Deflationary</h3>
                   <p className="text-muted-foreground text-sm">
-                    10% of every raffle is automatically burned, reducing Qubic supply and benefiting holders
+                    5% of every raffle is automatically burned, reducing Qubic supply and benefiting holders
                   </p>
                 </div>
               </StaggerItem>
@@ -223,7 +223,7 @@ const Home: React.FC = () => {
                   </div>
                   <h3 className="mb-2 font-semibold">Register Revenue</h3>
                   <p className="text-muted-foreground text-sm">
-                    5% of proceeds distributed to registered DAO members, plus 3% to shareholders
+                    5% of proceeds distributed to registered DAO members, plus 8% to shareholders
                   </p>
                 </div>
               </StaggerItem>

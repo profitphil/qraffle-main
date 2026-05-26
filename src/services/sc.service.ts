@@ -305,7 +305,7 @@ export const submitEntryAmount = async (sourceID: string, amount: number, tick: 
 export const submitProposal = async (
   sourceID: string,
   issuer: string,
-  assetName: number,
+  assetName: bigint,
   entryAmount: number,
   tick: number,
 ) => {

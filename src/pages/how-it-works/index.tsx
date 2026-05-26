@@ -37,13 +37,13 @@ const HowItWorks: React.FC = () => {
     {
       icon: Flame,
       title: "Deflationary Burns",
-      description: "10% of every raffle is automatically burned, reducing Qubic supply and benefiting all holders",
+      description: "5% of every raffle is automatically burned, reducing Qubic supply and benefiting all holders",
       color: "text-error-40 bg-error-90",
     },
     {
       icon: TrendingUp,
       title: "Dividend Rewards",
-      description: "3% of proceeds distributed to shareholders, creating passive income opportunities",
+      description: "8% of proceeds distributed to shareholders, creating passive income opportunities",
       color: "text-success-40 bg-success-90",
     },
     {
@@ -186,7 +186,7 @@ const HowItWorks: React.FC = () => {
                 </StaggerItem>
                 <StaggerItem>
                   <div className="bg-error-90 transform rounded-lg p-4 text-center transition-all duration-300 hover:scale-105">
-                    <div className="text-error-40 mb-2 text-2xl font-bold">10%</div>
+                    <div className="text-error-40 mb-2 text-2xl font-bold">5%</div>
                     <div className="text-foreground mb-1 text-sm font-medium">Token Burn</div>
                     <div className="text-muted-foreground text-xs">Permanently removed from supply</div>
                   </div>
@@ -200,7 +200,7 @@ const HowItWorks: React.FC = () => {
                 </StaggerItem>
                 <StaggerItem>
                   <div className="bg-success-90 transform rounded-lg p-4 text-center transition-all duration-300 hover:scale-105">
-                    <div className="text-success-40 mb-2 text-2xl font-bold">3%</div>
+                    <div className="text-success-40 mb-2 text-2xl font-bold">8%</div>
                     <div className="text-foreground mb-1 text-sm font-medium">Shareholders</div>
                     <div className="text-muted-foreground text-xs">Shareholders dividend distribution</div>
                   </div>

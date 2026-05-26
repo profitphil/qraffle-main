@@ -12,6 +12,8 @@ type MonitoringTask = {
   onFailure: () => Promise<void>;
   txHash?: string;
   canRecoverFromMoneyFlewFalse?: boolean;
+  timeoutMs?: number;
+  fastTrack?: boolean;
   participationMetadata?: {
     publicKey: string;
     participation: Participation;

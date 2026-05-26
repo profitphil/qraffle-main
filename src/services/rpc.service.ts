@@ -15,8 +15,20 @@ import type {
 import { uint8ArrayToBase64 } from "@/utils";
 import axios from "axios";
 
-const RPC_URL = import.meta.env.VITE_RPC_URL || "https://rpc.qubic.org";
-const QEVENT_URL = import.meta.env.VITE_QEVENT_URL || "https://dev01.qubic.org";
+const resolveEnv = () => {
+  if (typeof import.meta !== "undefined" && import.meta.env) {
+    return import.meta.env as Record<string, string | undefined>;
+  }
+  if (typeof process !== "undefined" && process.env) {
+    return process.env as Record<string, string | undefined>;
+  }
+  return {} as Record<string, string | undefined>;
+};
+
+const env = resolveEnv();
+
+const RPC_URL = env.VITE_RPC_URL || "https://rpc.qubic.org";
+const QEVENT_URL = env.VITE_QEVENT_URL || "https://dev01.qubic.org";
 
 const rpc = axios.create({
   baseURL: RPC_URL,

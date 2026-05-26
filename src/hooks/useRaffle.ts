@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   getActiveTokenRaffle,
+  getAnalytics,
   getEndedQuRaffle,
   getEndedTokenRaffle,
   getEpochRaffleIndexes,
@@ -81,8 +82,37 @@ export const useRaffle = (epoch: number, tokenRaffleIndex?: number) => {
         // Standard QUBIC raffle: fetch by epoch
         const quRaffle = await getEndedQuRaffle(epoch);
         if (quRaffle) {
-          return { ...quRaffle, type: "standard", epoch: tickInfo.epoch };
+          return { ...quRaffle, type: "standard", epoch };
         }
+
+        if (epoch === tickInfo.epoch) {
+          try {
+            const analytics = await getAnalytics();
+            const entryAmount = analytics?.currentQuRaffleAmount;
+            const numberOfMembers = analytics?.numberOfQuRaffleMembers;
+
+            if (
+              typeof entryAmount === "number" &&
+              Number.isFinite(entryAmount) &&
+              typeof numberOfMembers === "number" &&
+              Number.isFinite(numberOfMembers)
+            ) {
+              return {
+                epoch,
+                epochWinner: "",
+                receivedAmount: 0,
+                entryAmount,
+                numberOfMembers,
+                winnerIndex: 0,
+                numberOfDaoMembers: 0,
+                type: "standard",
+              };
+            }
+          } catch (error) {
+            console.warn("useRaffle: failed to load analytics fallback for current standard raffle", error);
+          }
+        }
+
         return null;
       }
     },

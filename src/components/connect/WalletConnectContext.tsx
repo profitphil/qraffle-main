@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import SignClient from "@walletconnect/sign-client";
 import type { WalletConnectAccount } from "./types/account";
-import { toast } from "sonner";
 
 interface WalletConnectContextType {
   signClient: SignClient | null;
@@ -93,11 +92,11 @@ export function WalletConnectProvider({ children }: WalletConnectProviderProps) 
   };
 
   const requestAccounts = async () => {
-    if (!signClient || !sessionTopic) throw new Error("Not connected");
+    const { client, topic } = getActiveSessionTopic();
 
     try {
-      const result = await signClient.request({
-        topic: sessionTopic,
+      const result = await client.request({
+        topic,
         chainId: "qubic:mainnet",
         request: {
           method: "qubic_requestAccounts",
@@ -114,10 +113,10 @@ export function WalletConnectProvider({ children }: WalletConnectProviderProps) 
   };
 
   const sendQubic = async (params: { from: string; to: string; amount: number }) => {
-    if (!signClient || !sessionTopic) throw new Error("Not connected");
+    const { client, topic } = getActiveSessionTopic();
 
-    return await signClient.request({
-      topic: sessionTopic,
+    return await client.request({
+      topic,
       chainId: "qubic:mainnet",
       request: {
         method: "qubic_sendQubic",
@@ -137,11 +136,11 @@ export function WalletConnectProvider({ children }: WalletConnectProviderProps) 
     inputType: number;
     payload: string | null;
   }) => {
-    if (!signClient || !sessionTopic) throw new Error("Not connected");
+    const { client, topic } = getActiveSessionTopic();
 
     try {
-      return await signClient.request({
-        topic: sessionTopic,
+      return await client.request({
+        topic,
         chainId: "qubic:mainnet",
         request: {
           method: "qubic_signTransaction",
@@ -157,16 +156,15 @@ export function WalletConnectProvider({ children }: WalletConnectProviderProps) 
         },
       });
     } catch (error) {
-      toast.error((error as Error)?.message || "Failed to sign transaction");
       throw error;
     }
   };
 
   const signMessage = async (params: { from: string; message: string }) => {
-    if (!signClient || !sessionTopic) throw new Error("Not connected");
+    const { client, topic } = getActiveSessionTopic();
 
-    return await signClient.request({
-      topic: sessionTopic,
+    return await client.request({
+      topic,
       chainId: "qubic:mainnet",
       request: {
         method: "qubic_sign",
@@ -211,6 +209,29 @@ export function WalletConnectProvider({ children }: WalletConnectProviderProps) 
       });
     });
   }, []);
+
+  const getActiveSessionTopic = () => {
+    const client = signClient;
+    const effectiveSessionTopic = sessionTopic || localStorage.getItem("sessionTopic") || "";
+
+    if (!client || !effectiveSessionTopic) {
+      throw new Error("WalletConnect not connected. Please reconnect your wallet.");
+    }
+
+    try {
+      client.session.get(effectiveSessionTopic);
+    } catch {
+      localStorage.removeItem("sessionTopic");
+      setSessionTopic("");
+      setIsConnected(false);
+      throw new Error("WalletConnect session expired. Please reconnect your wallet.");
+    }
+
+    return {
+      client,
+      topic: effectiveSessionTopic,
+    };
+  };
 
   const contextValue: WalletConnectContextType = {
     signClient,

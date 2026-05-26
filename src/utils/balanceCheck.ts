@@ -18,6 +18,24 @@ export interface TokenBalanceCheckResult extends BalanceCheckResult {
   transferAmount?: number;
 }
 
+const normalizeIdentity = (value: string | null | undefined) => value?.replace(/\0/g, "").trim().toUpperCase() || "";
+
+const normalizeAssetName = (value: string | null | undefined) => value?.replace(/\0/g, "").trim().toUpperCase() || "";
+
+const GARTH_ASSET_NAME = "GARTH";
+const GARTH_TOKEN_ISSUER = "PHOENIXCLQOBHDZCHJOCKCPZVTKALQBMXYOEDBUHSDCJRMTUCUBPLSUFNBIE";
+
+const getCanonicalTokenIdentity = (tokenName: string | null | undefined, tokenIssuer: string | null | undefined) => {
+  const normalizedTokenName = normalizeAssetName(tokenName);
+  const normalizedTokenIssuer =
+    normalizedTokenName === GARTH_ASSET_NAME ? GARTH_TOKEN_ISSUER : normalizeIdentity(tokenIssuer);
+
+  return {
+    normalizedTokenName,
+    normalizedTokenIssuer,
+  };
+};
+
 /**
  * Centralized balance checking utility
  * Checks if user has sufficient balance for various operations
@@ -98,7 +116,7 @@ export const BalanceChecks = {
 
   /**
    * Check token balance and approval for token raffle participation
-   * First checks managingContractIndex 19 (QRaffle), then index 1 (QX) if needed
+   * Uses managingContractIndex 1 (QX) rights/balance only
    */
   async forTokenRaffle(publicKey: string, tokenRaffleIndex: number): Promise<TokenBalanceCheckResult> {
     try {
@@ -117,6 +135,10 @@ export const BalanceChecks = {
       // Get user's token balance
       const userAssets = await fetchAssetsOwnership(publicKey);
       const requiredAmount = tokenRaffleInfo.entryAmount;
+      const { normalizedTokenIssuer, normalizedTokenName } = getCanonicalTokenIdentity(
+        tokenRaffleInfo.tokenName,
+        tokenRaffleInfo.tokenIssuer,
+      );
 
       console.log("All user assets:", userAssets);
       console.log("Looking for token:", {
@@ -125,87 +147,64 @@ export const BalanceChecks = {
         requiredAmount,
       });
 
-      // First check managingContractIndex 19 (QRaffle contract)
-      const tokenAssetAt19 = userAssets.find(
+      const matchingTokenAssets = userAssets.filter(
         (asset) =>
-          asset.issuer === tokenRaffleInfo.tokenIssuer &&
-          asset.assetName.toUpperCase() === tokenRaffleInfo.tokenName.toUpperCase() &&
-          asset.managingContractIndex === 19,
+          normalizeIdentity(asset.issuer) === normalizedTokenIssuer &&
+          normalizeAssetName(asset.assetName) === normalizedTokenName,
       );
 
-      const balanceAt19 = tokenAssetAt19?.amount || 0;
-      console.log("Balance at index 19:", balanceAt19);
-
-      // If enough balance at index 19, no transfer needed
-      if (balanceAt19 >= requiredAmount) {
-        console.log(`Sufficient balance at managingContractIndex 19: ${balanceAt19}`);
-        return {
-          hasEnoughBalance: true,
-          currentBalance: balanceAt19,
-          requiredAmount,
-          shortfall: 0,
-          // Use actual asset name from wallet (correct case) instead of raffle info
-          tokenName: tokenAssetAt19?.assetName || tokenRaffleInfo.tokenName,
-          tokenIssuer: tokenRaffleInfo.tokenIssuer,
-          needsApproval: false,
-          needsTransfer: false,
-        };
-      }
-
-      // Check managingContractIndex 1 (QX)
-      const tokenAssetAt1 = userAssets.find(
-        (asset) =>
-          asset.issuer === tokenRaffleInfo.tokenIssuer &&
-          asset.assetName.toUpperCase() === tokenRaffleInfo.tokenName.toUpperCase() &&
-          asset.managingContractIndex === 1,
+      const tokenAssetsAt1 = matchingTokenAssets.filter((asset) => asset.managingContractIndex === 1);
+      const tokenAssetsAt19 = matchingTokenAssets.filter((asset) => asset.managingContractIndex === 19);
+      const balanceAt1 = tokenAssetsAt1.reduce(
+        (sum, asset) => sum + (typeof asset.amount === "number" ? asset.amount : 0),
+        0,
       );
+      const balanceAt19 = tokenAssetsAt19.reduce(
+        (sum, asset) => sum + (typeof asset.amount === "number" ? asset.amount : 0),
+        0,
+      );
+      const totalAvailableBalance = balanceAt1 + balanceAt19;
 
-      const balanceAt1 = tokenAssetAt1?.amount || 0;
       console.log("Balance at index 1:", balanceAt1);
-      
-      const totalBalance = balanceAt19 + balanceAt1;
+      console.log("Balance at index 19:", balanceAt19);
+      console.log("All matching tokens across all indices:", matchingTokenAssets);
 
-      console.log({ balanceAt19, balanceAt1, totalBalance, requiredAmount, tokenRaffleInfo });
-      
-      // Check if token exists at any other managing contract index
-      const allMatchingTokens = userAssets.filter(
-        (asset) =>
-          asset.issuer === tokenRaffleInfo.tokenIssuer &&
-          asset.assetName.toUpperCase() === tokenRaffleInfo.tokenName.toUpperCase()
-      );
-      console.log("All matching tokens across all indices:", allMatchingTokens);
+      const displayTokenName = tokenAssetsAt19[0]?.assetName || tokenAssetsAt1[0]?.assetName || tokenRaffleInfo.tokenName;
 
-      const hasEnoughBalance = totalBalance >= requiredAmount;
-      const shortfall = Math.max(0, requiredAmount - totalBalance);
+      const hasEnoughBalance = totalAvailableBalance >= requiredAmount;
+      const shortfall = Math.max(0, requiredAmount - totalAvailableBalance);
 
       if (!hasEnoughBalance) {
         toast.error(
-          `Insufficient ${tokenRaffleInfo.tokenName} balance for token raffle. Required: ${requiredAmount.toLocaleString()}, Available: ${totalBalance.toLocaleString()}`,
+          `Insufficient ${displayTokenName} balance for token raffle. Required: ${requiredAmount.toLocaleString()}, Available: ${totalAvailableBalance.toLocaleString()}`,
         );
         return {
           hasEnoughBalance: false,
-          currentBalance: totalBalance,
+          currentBalance: totalAvailableBalance,
           requiredAmount,
           shortfall,
-          tokenName: tokenRaffleInfo.tokenName,
-          tokenIssuer: tokenRaffleInfo.tokenIssuer,
+          tokenName: displayTokenName,
+          tokenIssuer: normalizedTokenIssuer,
         };
       }
 
-      // Need to transfer from index 1 to index 19
-      const transferAmount = requiredAmount - balanceAt19;
-      console.log(`Need to transfer ${transferAmount} from index 1 to index 19`);
+      const transferAmount = Math.max(0, requiredAmount - balanceAt19);
+      const needsTransfer = transferAmount > 0;
+      console.log(`Sufficient total token balance: ${totalAvailableBalance}`);
+      console.log(`Token balance at managingContractIndex 19: ${balanceAt19}`);
+      if (needsTransfer) {
+        console.log(`Transfering ${transferAmount} from index 1 rights to index 19`);
+      }
 
       return {
         hasEnoughBalance: true,
-        currentBalance: totalBalance,
+        currentBalance: totalAvailableBalance,
         requiredAmount,
         shortfall: 0,
-        // Use actual asset name from wallet (correct case) instead of raffle info
-        tokenName: tokenAssetAt1?.assetName || tokenRaffleInfo.tokenName,
-        tokenIssuer: tokenRaffleInfo.tokenIssuer,
-        needsApproval: true,
-        needsTransfer: true,
+        tokenName: displayTokenName,
+        tokenIssuer: normalizedTokenIssuer,
+        needsApproval: needsTransfer,
+        needsTransfer,
         transferAmount,
       };
     } catch (error) {
@@ -240,21 +239,26 @@ export const BalanceChecks = {
 
       // Get user's token balance
       const userAssets = await fetchAssetsOwnership(publicKey);
+      const { normalizedTokenIssuer, normalizedTokenName } = getCanonicalTokenIdentity(
+        tokenRaffleInfo.tokenName,
+        tokenRaffleInfo.tokenIssuer,
+      );
       const tokenAsset = userAssets.find(
         (asset) =>
-          asset.issuer === tokenRaffleInfo.tokenIssuer &&
-          asset.assetName.toUpperCase() === tokenRaffleInfo.tokenName.toUpperCase() &&
+          normalizeIdentity(asset.issuer) === normalizedTokenIssuer &&
+          normalizeAssetName(asset.assetName) === normalizedTokenName &&
           asset.managingContractIndex === targetContractIndex,
       );
 
       const currentBalance = tokenAsset?.amount || 0;
       const requiredAmount = tokenRaffleInfo.entryAmount;
+      const displayTokenName = tokenAsset?.assetName || tokenRaffleInfo.tokenName;
       const hasEnoughBalance = currentBalance >= requiredAmount;
       const shortfall = Math.max(0, requiredAmount - currentBalance);
 
       if (!hasEnoughBalance) {
         toast.error(
-          `Insufficient ${tokenRaffleInfo.tokenName} balance for token raffle. Required: ${requiredAmount.toLocaleString()}, Available: ${currentBalance.toLocaleString()}`,
+          `Insufficient ${displayTokenName} balance for token raffle. Required: ${requiredAmount.toLocaleString()}, Available: ${currentBalance.toLocaleString()}`,
         );
       }
 
@@ -263,8 +267,8 @@ export const BalanceChecks = {
         currentBalance,
         requiredAmount,
         shortfall,
-        tokenName: tokenRaffleInfo.tokenName,
-        tokenIssuer: tokenRaffleInfo.tokenIssuer,
+        tokenName: displayTokenName,
+        tokenIssuer: normalizedTokenIssuer,
         needsApproval: true, // Token raffles always need share management rights transfer
       };
     } catch (error) {

@@ -53,10 +53,12 @@ const ConnectModal = ({ open, onClose, darkMode }: { open: boolean; onClose: () 
 
   const generateURI = async () => {
     const { uri, approve } = await walletConnectConnect();
+    const approvalPromise = approve();
+
     setConnectionURI(uri);
     const result = await generateQRCode(uri);
     setQrCode(result);
-    await approve();
+    await approvalPromise;
   };
 
   useEffect(() => {

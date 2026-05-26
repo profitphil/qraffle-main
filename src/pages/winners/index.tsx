@@ -53,12 +53,28 @@ const DAO_REGISTERS_OVERRIDE_BY_EPOCH: Record<number, number> = {
   202: 72,
 };
 
-const calcBreakdown = (totalEntries: number): EpochTotals => {
-  const burn = Math.floor((totalEntries * QRAFFLE_BURN_FEE) / 100);
-  const daoDividends = Math.floor((totalEntries * QRAFFLE_REGISTER_FEE) / 100);
-  const shareholderDividends = Math.floor((totalEntries * QRAFFLE_SHRAEHOLDER_FEE) / 100);
-  const charity = Math.floor((totalEntries * QRAFFLE_CHARITY_FEE) / 100);
-  const fee = Math.floor((totalEntries * QRAFFLE_FEE) / 100);
+const EPOCH_FEE_UPDATE_START = 210;
+
+const getFeeRatesForEpoch = (epoch: number) => {
+  const burn = epoch >= EPOCH_FEE_UPDATE_START ? 5 : QRAFFLE_BURN_FEE;
+  const shareholder = epoch >= EPOCH_FEE_UPDATE_START ? 8 : QRAFFLE_SHRAEHOLDER_FEE;
+
+  return {
+    burn,
+    dao: QRAFFLE_REGISTER_FEE,
+    shareholder,
+    charity: QRAFFLE_CHARITY_FEE,
+    fee: QRAFFLE_FEE,
+  };
+};
+
+const calcBreakdown = (totalEntries: number, epoch: number): EpochTotals => {
+  const rates = getFeeRatesForEpoch(epoch);
+  const burn = Math.floor((totalEntries * rates.burn) / 100);
+  const daoDividends = Math.floor((totalEntries * rates.dao) / 100);
+  const shareholderDividends = Math.floor((totalEntries * rates.shareholder) / 100);
+  const charity = Math.floor((totalEntries * rates.charity) / 100);
+  const fee = Math.floor((totalEntries * rates.fee) / 100);
   const winner = Math.max(0, totalEntries - burn - daoDividends - shareholderDividends - charity - fee);
 
   return {
@@ -301,6 +317,8 @@ const Winners: React.FC = () => {
                   <StaggerChildren staggerDelay={0.08} useInView={false} className="grid gap-4">
                     {epochs.map((epoch) => {
                       const epochRows = rowsByEpoch[epoch] || [];
+                      const feeRates = getFeeRatesForEpoch(epoch);
+                      const winnerPercent = 100 - feeRates.burn - feeRates.dao - feeRates.shareholder - feeRates.charity - feeRates.fee;
                       const epochDaoRegistersOverride = DAO_REGISTERS_OVERRIDE_BY_EPOCH[epoch];
                       // Prefer smart contract data, fallback to transaction history calculation
                       const epochDaoMembersFromSC = daoMembersByEpochFromSC[epoch];
@@ -347,29 +365,29 @@ const Winners: React.FC = () => {
                                       </div>
                                       <div className="flex min-h-8 items-center justify-center rounded-md bg-yellow-50 px-2 py-1 text-center text-yellow-700">
                                         <div className="font-semibold">
-                                          Winner ({100 - QRAFFLE_BURN_FEE - QRAFFLE_REGISTER_FEE - QRAFFLE_SHRAEHOLDER_FEE - QRAFFLE_CHARITY_FEE - QRAFFLE_FEE}%)
+                                          Winner ({winnerPercent}%)
                                         </div>
                                       </div>
                                       <div className="flex min-h-8 items-center justify-center rounded-md bg-red-50 px-2 py-1 text-center text-red-700">
-                                        <div className="font-semibold">Burn ({QRAFFLE_BURN_FEE}%)</div>
+                                        <div className="font-semibold">Burn ({feeRates.burn}%)</div>
                                       </div>
                                       <div className="flex min-h-8 items-center justify-center rounded-md bg-blue-50 px-2 py-1 text-center text-blue-700">
-                                        <div className="font-semibold">DAO ({QRAFFLE_REGISTER_FEE}%)</div>
+                                        <div className="font-semibold">DAO ({feeRates.dao}%)</div>
                                       </div>
                                       <div className="flex min-h-8 items-center justify-center rounded-md bg-green-50 px-2 py-1 text-center text-green-700">
-                                        <div className="font-semibold">Shareholders ({QRAFFLE_SHRAEHOLDER_FEE}%)</div>
+                                        <div className="font-semibold">Shareholders ({feeRates.shareholder}%)</div>
                                       </div>
                                       <div className="flex min-h-8 items-center justify-center rounded-md bg-purple-50 px-2 py-1 text-center text-purple-700">
-                                        <div className="font-semibold">Charity ({QRAFFLE_CHARITY_FEE}%)</div>
+                                        <div className="font-semibold">Charity ({feeRates.charity}%)</div>
                                       </div>
                                       <div className="flex min-h-8 items-center justify-center rounded-md bg-gray-50 px-2 py-1 text-center text-gray-700">
-                                        <div className="font-semibold">Fee ({QRAFFLE_FEE}%)</div>
+                                        <div className="font-semibold">Fee ({feeRates.fee}%)</div>
                                       </div>
                                     </div>
 
                                     <div className="mt-2 grid gap-2">
                                       {currencyKeys.map((currency) => {
-                                        const totals = calcBreakdown(totalsByCurrency[currency] || 0);
+                                        const totals = calcBreakdown(totalsByCurrency[currency] || 0, epoch);
                                         const daoDivisor = typeof epochDaoRegisters === "number" ? epochDaoRegisters : daoRegisters;
                                         const daoPerMember = daoDivisor > 0 ? Math.floor(Number(totals.daoDividends) / daoDivisor) : 0;
                                         const shareholderPerMember = Math.floor(Number(totals.shareholderDividends) / shareholdersCount);

@@ -107,7 +107,7 @@ const Raffles: React.FC = () => {
               <h1 className="text-foreground mb-4 text-4xl font-bold">Qraffle System</h1>
               <p className="text-muted-foreground mx-auto max-w-3xl">
                 Participate in our dual raffle system: Standard QUBIC raffles with dynamic pricing and
-                community-proposed token raffles. Every raffle burns 10% of entries and distributes 10% as fees to
+                community-proposed token raffles. Every raffle burns 5% of entries and distributes 5% as fees to
                 support the ecosystem.
               </p>
               <div className="mt-4 flex justify-center">

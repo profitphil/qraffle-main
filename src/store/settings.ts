@@ -1,6 +1,9 @@
 import { DEFAULT_TICK_OFFSET } from "@/utils/constants";
 import { atom } from "jotai";
 
+const MIN_TICK_OFFSET = 8;
+const MAX_TICK_OFFSET = 20;
+
 export type Settings = {
   tickOffset: number;
 };
@@ -11,7 +14,12 @@ const parsedLocalSettings = JSON.parse(
 
 const normalizeTickOffset = (value: unknown) => {
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : DEFAULT_TICK_OFFSET;
+  const fallback = Math.max(MIN_TICK_OFFSET, Math.min(DEFAULT_TICK_OFFSET, MAX_TICK_OFFSET));
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.max(MIN_TICK_OFFSET, Math.min(parsed, MAX_TICK_OFFSET));
 };
 
 const localStorageSettings: Settings = {

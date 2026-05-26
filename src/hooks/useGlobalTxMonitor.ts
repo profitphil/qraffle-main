@@ -1,10 +1,10 @@
 import { toast } from "sonner";
 import { useAtom } from "jotai";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { monitoringTasksAtom, monitorStrategyAtom, useTxMonitor, resultAtom } from "@/store/txMonitor";
 import { latestTickAtom } from "@/store/rpc";
-import { fetchLatestTick, fetchTxStatus } from "@/services/rpc.service";
+import { fetchLatestTick, fetchTxStatus, fetchTickTxs } from "@/services/rpc.service";
 import { fetchTickEvents } from "@/services/rpc.service";
 import { decodeQraffleLog } from "@/services/log.service";
 import { addParticipation } from "@/utils/participationStorage";
@@ -32,9 +32,15 @@ const useGlobalTxMonitor = () => {
   const monitoringToastIdRef = useRef<string | number | null>(null);
   const v2CooldownUntilRef = useRef<Record<string, number>>({});
   const v2NotFoundCountRef = useRef<Record<string, number>>({});
+  const [visibilityWakeToken, setVisibilityWakeToken] = useState(0);
 
   const resultHandlers = useResultHandlers(setResult);
   const MONITOR_TIMEOUT_MS = 120000;
+  const FAST_TRACK_MIN_AGE_MS = 1500;
+  const FAST_TRACK_INITIAL_COOLDOWN_MS = 600;
+  const FAST_TRACK_PENDING_COOLDOWN_MS = 800;
+  const FAST_TRACK_RECOVERABLE_BACKOFF_MS = 1200;
+  const FAST_TRACK_ERROR_BACKOFF_MS = 1500;
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
   const isTransientRpcError = (error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
@@ -59,6 +65,20 @@ const useGlobalTxMonitor = () => {
     const rawMoneyFlew = (status as { moneyFlew?: unknown }).moneyFlew;
     return typeof rawMoneyFlew === "boolean" ? rawMoneyFlew : null;
   };
+  const getTickTransactionMoneyFlew = async (txHash: string, targetTick: number): Promise<boolean | null> => {
+    try {
+      const tickTxs = await fetchTickTxs(targetTick);
+      const normalizedTxHash = txHash.toLowerCase();
+      const match = tickTxs.find((tx) => tx.transaction?.txId?.toLowerCase() === normalizedTxHash);
+      if (!match) return null;
+      return typeof match.moneyFlew === "boolean" ? match.moneyFlew : null;
+    } catch (error) {
+      if (!isTransientRpcError(error) && !isTxStatusNotFoundError(error)) {
+        console.error("V2 Monitoring: failed to fetch tick transactions", error);
+      }
+      return null;
+    }
+  };
   const hasDefinitiveFailureSignal = (status: unknown): boolean => {
     if (!status || typeof status !== "object") return false;
     const parsed = status as Record<string, unknown>;
@@ -68,6 +88,32 @@ const useGlobalTxMonitor = () => {
       (value) => typeof value === "string" && /(fail|failed|reject|rejected|invalid|error)/i.test(value),
     );
   };
+
+  // Wake the monitor when the tab returns to foreground (mobile browsers
+  // throttle / suspend setInterval while a wallet app is open for signing).
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!isMonitoring) return;
+      // Reset any in-flight backoffs so the next cycle polls immediately.
+      v2CooldownUntilRef.current = {};
+      // Refresh the cached latest tick (used by v1/v3) right away.
+      fetchLatestTick()
+        .then((tick) => setLatestTick(tick))
+        .catch((error) => console.warn("visibility wake: failed to fetch latest tick", error));
+      // Bump a state token so v2/v3 effects re-run a poll cycle now.
+      setVisibilityWakeToken((n) => n + 1);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    window.addEventListener("pageshow", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      window.removeEventListener("pageshow", onVisible);
+    };
+  }, [isMonitoring, setLatestTick]);
 
   useEffect(() => {
     if (!isMonitoring) {
@@ -202,11 +248,16 @@ const useGlobalTxMonitor = () => {
     const timeoutIntervalId = setInterval(() => {
       Object.entries(monitoringTasks).forEach(async ([taskId, task]) => {
         if (!task.createdAt) return;
-        if (Date.now() - task.createdAt > MONITOR_TIMEOUT_MS) {
+        const taskTimeoutMs =
+          typeof task.timeoutMs === "number" && Number.isFinite(task.timeoutMs) && task.timeoutMs > 0
+            ? task.timeoutMs
+            : MONITOR_TIMEOUT_MS;
+        if (Date.now() - task.createdAt > taskTimeoutMs) {
           console.error(`Monitoring timeout for task ${taskId}`);
 
           if (monitorStrategy === "v2" && task.canRecoverFromMoneyFlewFalse) {
             let checkerSuccess = false;
+            let tickMoneyFlew: boolean | null = null;
             try {
               const checkerRetryAttempts = 3;
               for (let attempt = 1; attempt <= checkerRetryAttempts; attempt++) {
@@ -220,11 +271,15 @@ const useGlobalTxMonitor = () => {
               console.error("V2 Monitoring: checker failed on timeout fallback", checkerError);
             }
 
+            if (!checkerSuccess && task.txHash) {
+              tickMoneyFlew = await getTickTransactionMoneyFlew(task.txHash, task.targetTick);
+            }
+
             stopMonitoring(taskId);
             delete v2CooldownUntilRef.current[taskId];
             delete v2NotFoundCountRef.current[taskId];
 
-            if (checkerSuccess) {
+            if (checkerSuccess || tickMoneyFlew === true) {
               await task.onSuccess?.();
               await resultHandlers.onSuccess();
               return;
@@ -241,7 +296,7 @@ const useGlobalTxMonitor = () => {
     }, 1000);
 
     return () => clearInterval(timeoutIntervalId);
-  }, [isMonitoring, monitoringTasks, monitorStrategy, stopMonitoring, resultHandlers]);
+  }, [isMonitoring, monitoringTasks, monitorStrategy, stopMonitoring, resultHandlers, visibilityWakeToken]);
 
   useEffect(() => {
     if (!isMonitoring) return;
@@ -265,6 +320,8 @@ const useGlobalTxMonitor = () => {
             const cooldownUntil = v2CooldownUntilRef.current[taskId] ?? 0;
             if (Date.now() < cooldownUntil) continue;
 
+            const isFastTrack = task.fastTrack === true;
+
             if (task.canRecoverFromMoneyFlewFalse) {
               let checkerSuccess = false;
               try {
@@ -283,8 +340,10 @@ const useGlobalTxMonitor = () => {
               }
 
               const taskAgeMs = Date.now() - (task.createdAt ?? Date.now());
-              if (taskAgeMs < 6000) {
-                v2CooldownUntilRef.current[taskId] = Date.now() + 2000;
+              const minAgeBeforeStatusCheckMs = isFastTrack ? FAST_TRACK_MIN_AGE_MS : 6000;
+              if (taskAgeMs < minAgeBeforeStatusCheckMs) {
+                const warmupCooldownMs = isFastTrack ? FAST_TRACK_INITIAL_COOLDOWN_MS : 2000;
+                v2CooldownUntilRef.current[taskId] = Date.now() + warmupCooldownMs;
                 continue;
               }
             }
@@ -308,14 +367,14 @@ const useGlobalTxMonitor = () => {
               // Use the task checker as authoritative fallback when available.
               let checkerSuccess = false;
               try {
-                const checkerRetryAttempts = 6;
+                const checkerRetryAttempts = isFastTrack ? 3 : 6;
                 for (let attempt = 1; attempt <= checkerRetryAttempts; attempt++) {
                   checkerSuccess = await task.checker();
                   if (checkerSuccess) {
                     break;
                   }
                   if (attempt < checkerRetryAttempts) {
-                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                    await new Promise((resolve) => setTimeout(resolve, isFastTrack ? 500 : 1000));
                   }
                 }
               } catch (checkerError) {
@@ -329,11 +388,11 @@ const useGlobalTxMonitor = () => {
                 delete v2NotFoundCountRef.current[taskId];
                 await onSuccess();
               } else {
-                console.error("V2 Monitoring: Transaction found and checker did not confirm success");
-                stopMonitoring(taskId);
-                delete v2CooldownUntilRef.current[taskId];
-                delete v2NotFoundCountRef.current[taskId];
-                await onFailure();
+                // Do not fail immediately for recoverable tasks.
+                // Some state transitions can lag tx-status by several seconds.
+                v2CooldownUntilRef.current[taskId] =
+                  Date.now() + (isFastTrack ? FAST_TRACK_RECOVERABLE_BACKOFF_MS : 3000);
+                console.warn("V2 Monitoring: moneyFlew=false and checker not yet positive, continuing to monitor");
               }
             } else if (moneyFlew === true) {
               console.log("V2 Monitoring: Transaction executed successfully (moneyFlew: true)");
@@ -358,7 +417,7 @@ const useGlobalTxMonitor = () => {
                 await onSuccess();
               } else {
                 // keep monitoring with light polling to avoid RPC pressure
-                v2CooldownUntilRef.current[taskId] = Date.now() + 2500;
+                v2CooldownUntilRef.current[taskId] = Date.now() + (isFastTrack ? FAST_TRACK_PENDING_COOLDOWN_MS : 2500);
               }
             }
           } catch (error) {
@@ -388,8 +447,29 @@ const useGlobalTxMonitor = () => {
                 }
               }
 
+              if (task.txHash) {
+                const tickMoneyFlew = await getTickTransactionMoneyFlew(task.txHash, task.targetTick);
+                if (tickMoneyFlew === true) {
+                  console.log("V2 Monitoring: tick transaction confirmed success after tx-status 404");
+                  stopMonitoring(taskId);
+                  delete v2CooldownUntilRef.current[taskId];
+                  delete v2NotFoundCountRef.current[taskId];
+                  await onSuccess();
+                  continue;
+                }
+
+                if (tickMoneyFlew === false && !task.canRecoverFromMoneyFlewFalse) {
+                  console.error("V2 Monitoring: tick transaction reported failed after tx-status 404");
+                  stopMonitoring(taskId);
+                  delete v2CooldownUntilRef.current[taskId];
+                  delete v2NotFoundCountRef.current[taskId];
+                  await onFailure();
+                  continue;
+                }
+              }
+
               const isOldEnoughToFail = Date.now() - (task.createdAt ?? Date.now()) > 30000;
-              if (isOldEnoughToFail) {
+              if (isOldEnoughToFail && !task.canRecoverFromMoneyFlewFalse) {
                 console.error("V2 Monitoring: tx-status 404 and tx is stale by age, failing task");
                 stopMonitoring(taskId);
                 delete v2CooldownUntilRef.current[taskId];
@@ -402,6 +482,16 @@ const useGlobalTxMonitor = () => {
                 const currentTick = await fetchLatestTick();
                 const hasPassedTargetTick = currentTick > task.targetTick + 1;
                 if (hasPassedTargetTick) {
+                  if (task.canRecoverFromMoneyFlewFalse) {
+                    const notFoundCount = (v2NotFoundCountRef.current[taskId] ?? 0) + 1;
+                    v2NotFoundCountRef.current[taskId] = notFoundCount;
+                    const backoffMs = task.fastTrack
+                      ? FAST_TRACK_RECOVERABLE_BACKOFF_MS
+                      : Math.min(12000, 4000 + (notFoundCount - 1) * 2000);
+                    v2CooldownUntilRef.current[taskId] = Date.now() + backoffMs;
+                    continue;
+                  }
+
                   console.error(
                     `V2 Monitoring: tx-status 404 and tx is stale (currentTick=${currentTick}, targetTick=${task.targetTick}), failing task`,
                   );
@@ -418,13 +508,19 @@ const useGlobalTxMonitor = () => {
               const notFoundCount = (v2NotFoundCountRef.current[taskId] ?? 0) + 1;
               v2NotFoundCountRef.current[taskId] = notFoundCount;
               const backoffMs = task.canRecoverFromMoneyFlewFalse
-                ? Math.min(12000, 3000 + (notFoundCount - 1) * 2000)
+                ? task.fastTrack
+                  ? FAST_TRACK_PENDING_COOLDOWN_MS
+                  : Math.min(12000, 3000 + (notFoundCount - 1) * 2000)
                 : 1500;
               v2CooldownUntilRef.current[taskId] = Date.now() + backoffMs;
               continue;
             }
 
-            const backoffMs = isTransientRpcError(error) ? 6000 : 3000;
+            const backoffMs = task.fastTrack
+              ? FAST_TRACK_ERROR_BACKOFF_MS
+              : isTransientRpcError(error)
+                ? 6000
+                : 3000;
             v2CooldownUntilRef.current[taskId] = Date.now() + backoffMs;
             console.error(`V2 Monitoring: Error fetching tx status, backing off for ${backoffMs}ms`, error);
             // Do not fail immediately on transient RPC errors; timeout effect will handle final failure.
@@ -437,7 +533,7 @@ const useGlobalTxMonitor = () => {
       }, 1500);
       return () => clearInterval(v2IntervalId);
     }
-  }, [isMonitoring, monitoringTasks, monitorStrategy, stopMonitoring, resultHandlers]);
+  }, [isMonitoring, monitoringTasks, monitorStrategy, stopMonitoring, resultHandlers, visibilityWakeToken]);
 
   /**
    * v3: using log - best choice
@@ -545,7 +641,7 @@ const useGlobalTxMonitor = () => {
         console.error("Error in monitoring process:", error);
       });
     }
-  }, [isMonitoring, monitoringTasks, latestTick, monitorStrategy, stopMonitoring, resultHandlers, setResult]);
+  }, [isMonitoring, monitoringTasks, latestTick, monitorStrategy, stopMonitoring, resultHandlers, setResult, visibilityWakeToken]);
 
   useEffect(() => {
     if (!isMonitoring) return;

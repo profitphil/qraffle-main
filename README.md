@@ -26,7 +26,7 @@ Qraffle is a decentralized raffle system built on the Qubic blockchain with **DA
 - **80% Prize Pool**: Winners receive majority of collected funds
 - **20% Fee Structure**: Transparent distribution across burn, shareholders, registers, system, and charity
 - **Revenue Sharing**: Registered participants earn 5% of all raffle proceeds
-- **Deflationary Burns**: 10% of fees permanently removed from circulation
+- **Deflationary Burns**: 5% of fees permanently removed from circulation
 
 ## 🔄 How It Works
 
@@ -50,8 +50,8 @@ Qraffle is a decentralized raffle system built on the Qubic blockchain with **DA
 
 ### Fee Distribution (20% of All Proceeds)
 
-- **🔥 Burn (10%)**: Tokens permanently removed from circulation
-- **👥 Shareholders (3%)**: Distributed to token holders
+- **🔥 Burn (5%)**: Tokens permanently removed from circulation
+- **👥 Shareholders (8%)**: Distributed to token holders
 - **🏛️ Registers (5%)**: Revenue for DAO participants
 - **⚙️ System (1%)**: Platform maintenance
 - **💝 Charity (1%)**: Donated to @Kimz300

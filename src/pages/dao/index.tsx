@@ -63,7 +63,11 @@ const DAO: React.FC = () => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showEntryAmountConfirm, setShowEntryAmountConfirm] = useState(false);
   const [showVoteConfirm, setShowVoteConfirm] = useState(false);
-  const [voteData, setVoteData] = useState<{ proposalId: number; vote: boolean } | null>(null);
+  const [voteData, setVoteData] = useState<{
+    proposalId: number;
+    vote: boolean;
+    baseline?: { nYes: number; nNo: number };
+  } | null>(null);
   const { handleRegister } = useRegisterInSystem();
   const { handleLogout } = useLogoutInSystem();
   const { handleSubmitEntryAmount } = useSubmitEntryAmount();
@@ -151,14 +155,16 @@ const DAO: React.FC = () => {
     handleSubmitEntryAmount(entryAmountInput);
   };
 
-  const handleVoteConfirm = () => {
+  const handleVoteConfirm = async () => {
     if (voteData) {
       setShowVoteConfirm(false);
-      handleVote(voteData.proposalId, voteData.vote);
+      const { proposalId, vote, baseline } = voteData;
 
-      if (wallet?.publicKey && typeof window !== "undefined") {
+      await handleVote(proposalId, vote, () => {
+        if (!wallet?.publicKey || typeof window === "undefined") return;
+
         setUserVotesByProposalId((prev) => {
-          const next = { ...prev, [voteData.proposalId]: voteData.vote };
+          const next = { ...prev, [proposalId]: vote };
           try {
             localStorage.setItem(getVoteStorageKey(wallet.publicKey), JSON.stringify(next));
           } catch {
@@ -166,14 +172,14 @@ const DAO: React.FC = () => {
           }
           return next;
         });
-      }
+      }, baseline);
 
       setVoteData(null);
     }
   };
 
-  const handleVoteClick = (proposalId: number, vote: boolean) => {
-    setVoteData({ proposalId, vote });
+  const handleVoteClick = (proposalId: number, vote: boolean, baseline?: { nYes: number; nNo: number }) => {
+    setVoteData({ proposalId, vote, baseline });
     setShowVoteConfirm(true);
   };
 
@@ -706,7 +712,12 @@ const DAO: React.FC = () => {
                                     disabled={!isRegistered}
                                     variant="default"
                                     className="hover:success h-11 w-full font-semibold shadow-lg"
-                                    onClick={() => handleVoteClick(proposal.id, true)}
+                                    onClick={() =>
+                                      handleVoteClick(proposal.id, true, {
+                                        nYes: Number(proposal?.nYes || 0),
+                                        nNo: Number(proposal?.nNo || 0),
+                                      })
+                                    }
                                   >
                                     <CheckCircle className="mr-2 h-4 w-4" />
                                     Vote Yes
@@ -720,7 +731,12 @@ const DAO: React.FC = () => {
                                     disabled={!isRegistered}
                                     variant="destructive"
                                     className="h-11 w-full font-semibold shadow-lg"
-                                    onClick={() => handleVoteClick(proposal.id, false)}
+                                    onClick={() =>
+                                      handleVoteClick(proposal.id, false, {
+                                        nYes: Number(proposal?.nYes || 0),
+                                        nNo: Number(proposal?.nNo || 0),
+                                      })
+                                    }
                                   >
                                     <AlertCircle className="mr-2 h-4 w-4" />
                                     Vote No
@@ -831,26 +847,16 @@ const DAO: React.FC = () => {
         onOpenChange={setShowLogoutConfirm}
         onConfirm={handleLogoutConfirm}
         title="Confirm DAO Logout"
-        description="You are about to logout from the Qraffle DAO. This will remove your ability to participate in governance and receive revenue share."
+        description="You are about to logout from the Qraffle DAO. This will remove your ability to participate in governance and receive revenue share, and a 5% logout fee will apply."
         type="warning"
         confirmText="Logout from DAO"
         cancelText="Stay Registered"
         details={[
-          // {
-          //   label: "Registration Amount",
-          //   value: `${QRAFFLE_REGISTER_AMOUNT.toLocaleString()} QUBIC`,
-          //   icon: <Coins className="text-muted-foreground h-4 w-4" />,
-          // },
-          // {
-          //   label: "Processing Fee",
-          //   value: `${QRAFFLE_LOGOUT_FEE.toLocaleString()} QUBIC`,
-          //   icon: <Coins className="text-muted-foreground h-4 w-4" />,
-          // },
-          // {
-          //   label: "You Will Receive",
-          //   value: `${(QRAFFLE_REGISTER_AMOUNT - QRAFFLE_LOGOUT_FEE).toLocaleString()} QUBIC`,
-          //   icon: <TrendingUp className="text-success h-4 w-4" />,
-          // },
+          {
+            label: "Logout Fee",
+            value: "5% processing fee",
+            icon: <Coins className="text-muted-foreground h-4 w-4" />,
+          },
           {
             label: "Impact",
             value: "Loss of voting rights & revenue share",
