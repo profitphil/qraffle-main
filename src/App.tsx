@@ -15,7 +15,18 @@ import { WalletConnectProvider } from "./components/connect/WalletConnectContext
 import { Toaster } from "sonner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Data is considered fresh for 60s, so navigating between pages or
+      // remounting components reuses the cache instead of refetching.
+      staleTime: 60_000,
+      // Don't refetch every query just because the tab regained focus —
+      // this was the main source of redundant smart-contract/RPC calls.
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const router = createBrowserRouter([
   {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAtom } from "jotai";
 import { Trophy, Crown, ChevronDown } from "lucide-react";
@@ -444,12 +444,13 @@ const Winners: React.FC = () => {
   // Extract numberOfDaoMembers from QuRaffle data (provided by smart contract)
   const daoMembersByEpochFromSC = buildDaoMembersFromSC(qraffles);
 
-  const { data: daoRegistersByEpoch } = useQuery({
-    queryKey: ["daoRegistersByEpoch", recentStartEpoch, endEpoch, daoRegisters, tickInfo.tick],
+  // Ended epochs are immutable: their tick ranges never change, so their
+  // register deltas are fetched once and cached indefinitely. This avoids
+  // re-scanning past-epoch transactions on every tick update.
+  const { data: endedEpochDeltas } = useQuery({
+    queryKey: ["endedEpochRegisterDeltas", recentStartEpoch, endEpoch],
     queryFn: async () => {
       const contractId = await getContractId(19);
-      const map: Record<number, number> = {};
-
       const deltas = await Promise.all(
         Array.from({ length: endEpoch - recentStartEpoch + 1 }, (_, i) => recentStartEpoch + i).map(async (epoch) => {
           const delta = await countRegisterDeltaForEpoch(contractId, epoch);
@@ -459,23 +460,40 @@ const Winners: React.FC = () => {
 
       const deltaByEpoch: Record<number, number> = {};
       for (const [epoch, delta] of deltas) deltaByEpoch[epoch] = delta;
-
-      const hasAnyDelta = Object.values(deltaByEpoch).some((d) => d !== 0);
-      if (!hasAnyDelta) return null;
-
-      const currentEpochDeltaSoFar = await countRegisterDeltaForTickRange(contractId, tickInfo.initialTick, tickInfo.tick);
-      let current = Math.max(0, daoRegisters - currentEpochDeltaSoFar);
-
-      for (let epoch = endEpoch; epoch >= recentStartEpoch; epoch--) {
-        map[epoch] = current;
-        current = Math.max(0, current - (deltaByEpoch[epoch] || 0));
-      }
-
-      return map;
+      return deltaByEpoch;
     },
-    staleTime: 5 * 60 * 1000,
-    enabled: endEpoch >= recentStartEpoch && recentStartEpoch > 0 && tickInfo.tick > 0,
+    enabled: endEpoch >= recentStartEpoch && recentStartEpoch > 0,
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
+
+  // Only the current epoch's tick range grows over time, so this is the only
+  // transaction scan that needs to refresh periodically.
+  const { data: currentEpochDelta } = useQuery({
+    queryKey: ["currentEpochRegisterDelta", tickInfo.epoch],
+    queryFn: async () => {
+      const contractId = await getContractId(19);
+      return await countRegisterDeltaForTickRange(contractId, tickInfo.initialTick, tickInfo.tick);
+    },
+    enabled: tickInfo.epoch > 0 && tickInfo.initialTick > 0 && tickInfo.tick > 0,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
+
+  const daoRegistersByEpoch = useMemo<Record<number, number> | null | undefined>(() => {
+    if (!endedEpochDeltas) return undefined;
+
+    const hasAnyDelta = Object.values(endedEpochDeltas).some((d) => d !== 0);
+    if (!hasAnyDelta) return null;
+
+    let current = Math.max(0, daoRegisters - (currentEpochDelta ?? 0));
+    const map: Record<number, number> = {};
+    for (let epoch = endEpoch; epoch >= recentStartEpoch; epoch--) {
+      map[epoch] = current;
+      current = Math.max(0, current - (endedEpochDeltas[epoch] || 0));
+    }
+    return map;
+  }, [endedEpochDeltas, currentEpochDelta, daoRegisters, endEpoch, recentStartEpoch]);
 
   // --- User's Choice: a single, on-demand epoch shown below the recent list ---
   const [choiceEpoch, setChoiceEpoch] = useState<number | null>(null);
