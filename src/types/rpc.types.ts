@@ -1,11 +1,11 @@
-export type TickInfo = {
+export interface TickInfo {
   tick: number;
   duration: number;
   epoch: number;
   initialTick: number;
 };
 
-export type Balance = {
+export interface Balance {
   id: string;
   balance: number;
   validForTick: number;
@@ -16,7 +16,35 @@ export type Balance = {
   numberOfIncomingTransfers: number;
   numberOfOutgoingTransfers: number;
 };
+export interface OwnedAssets {
+  data: {
+    ownerIdentity: string;
+    type: number;
+    padding: number;
+    managingContractIndex: number;
+    issuanceIndex: number;
+    numberOfUnits: string;
+    issuedAsset: {
+      issuerIdentity: string;
+      type: number;
+      name: string;
+      numberOfDecimalPlaces: number;
+      unitOfMeasurement: number[];
+    };
+  };
+  info: {
+    tick: number;
+    universeIndex: number;
+  };
+}
 
+export interface AssetsOwnership {
+  ownerIdentity: string;
+  managingContractIndex: number;
+  amount: number;
+  assetName: string;
+  issuer: string;
+}
 export interface IQuerySC {
   contractIndex: number;
   inputType: number;
