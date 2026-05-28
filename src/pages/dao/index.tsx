@@ -14,8 +14,9 @@ import {
   Activity,
   Plus,
   Hash,
+  Package,
 } from "lucide-react";
-import { getTimeToNewEpoch, truncateMiddle } from "@/utils";
+import { getTimeToNewEpoch } from "@/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,16 +30,8 @@ import {
 } from "@/components/animations";
 import { motion } from "framer-motion";
 import SEO from "@/components/SEO";
-import {
-  QRAFFLE_LOGOUT_FEE,
-  QRAFFLE_REGISTER_AMOUNT,
-  QRAFFLE_QXMR_REGISTER_AMOUNT,
-  QRAFFLE_QXMR_LOGOUT_FEE,
-} from "@/utils/constants";
 import { useAtom } from "jotai";
 import { tickInfoAtom } from "@/store/rpc";
-import { useRegisterInSystem } from "@/hooks/useRegisterInSystem";
-import { useLogoutInSystem } from "@/hooks/useLogoutInSystem";
 import { useQubicConnect } from "@/components/connect/QubicConnectContext";
 import { useAllRegisters } from "@/hooks/useAllRegisters";
 import { useSubmitEntryAmount } from "@/hooks/useSubmitEntryAmount";
@@ -51,7 +44,16 @@ import { useQuRaffleEntryAmountPerUser } from "@/hooks/useQuRaffleEntryAmount";
 import { useQuery } from "@tanstack/react-query";
 import { useTxMonitor } from "@/store/txMonitor";
 
+const RAFFLE_TABS = [
+  { key: "qu", label: "Qu Raffle" },
+  { key: "token", label: "Token Raffle" },
+  { key: "bundle", label: "Bundle Raffle (Asset Raffle)" },
+] as const;
+
+type RaffleTabKey = (typeof RAFFLE_TABS)[number]["key"];
+
 const DAO: React.FC = () => {
+  const [activeRaffleTab, setActiveRaffleTab] = useState<RaffleTabKey>("qu");
   const [submittedEntryAmount] = useState<number | null>(null);
   const [entryAmountInput, setEntryAmountInput] = useState(1000000);
   const [timeLeft, setTimeLeft] = useState(getTimeToNewEpoch());
@@ -59,8 +61,6 @@ const DAO: React.FC = () => {
   const [entryAverageAmount, setEntryAverageAmount] = useState<number | null>(null);
   const [userVotesByProposalId, setUserVotesByProposalId] = useState<Record<number, boolean>>({});
   // Confirmation modal states
-  const [showRegisterConfirm, setShowRegisterConfirm] = useState(false);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showEntryAmountConfirm, setShowEntryAmountConfirm] = useState(false);
   const [showVoteConfirm, setShowVoteConfirm] = useState(false);
   const [voteData, setVoteData] = useState<{
@@ -68,8 +68,6 @@ const DAO: React.FC = () => {
     vote: boolean;
     baseline?: { nYes: number; nNo: number };
   } | null>(null);
-  const { handleRegister } = useRegisterInSystem();
-  const { handleLogout } = useLogoutInSystem();
   const { handleSubmitEntryAmount } = useSubmitEntryAmount();
   const { handleVote } = useVoteInProposal();
   const { wallet } = useQubicConnect();
@@ -105,11 +103,6 @@ const DAO: React.FC = () => {
     }
   }, [wallet?.publicKey]);
 
-  // Registration method state
-  const [registrationMethod, setRegistrationMethod] = useState<"QUBIC" | "QXMR">("QUBIC");
-  const QXMR_ISSUER = "QXMRTKAIIGLUREPIQPCMHCKWSIPDTUYFCFNYXQLTECSUJVYEMMDELBMDOEYB";
-  const QXMR_ASSET_NAME = "QXMR";
-
   const { result } = useTxMonitor();
 
   const fetchEntryAverageAmount = async () => {
@@ -136,20 +129,6 @@ const DAO: React.FC = () => {
   const { entryAmount } = useQuRaffleEntryAmountPerUser(wallet?.publicKey || "");
 
   // Confirmation handlers
-  const handleRegisterConfirm = () => {
-    setShowRegisterConfirm(false);
-    if (registrationMethod === "QXMR") {
-      handleRegister({ withQXMR: true, qxmrIssuer: QXMR_ISSUER, qxmrAssetName: QXMR_ASSET_NAME });
-    } else {
-      handleRegister();
-    }
-  };
-
-  const handleLogoutConfirm = () => {
-    setShowLogoutConfirm(false);
-    handleLogout();
-  };
-
   const handleEntryAmountConfirm = () => {
     setShowEntryAmountConfirm(false);
     handleSubmitEntryAmount(entryAmountInput);
@@ -389,126 +368,28 @@ const DAO: React.FC = () => {
             </div>
           </FadeInWhenVisible>
 
-          <StaggerChildren staggerDelay={0.2} className="grid gap-6 lg:grid-cols-2">
-            {/* Left Column - Registration Status and Entry Amount */}
-            <StaggerItem className="lg:col-span-2">
-              <div className="grid gap-4 lg:grid-cols-2">
-                {/* Registration Status */}
-                <Card className="from-card to-card/80 border-primary/10 transform bg-gradient-to-br shadow-lg transition-all duration-300 hover:scale-105">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center space-x-2">
-                      <div className="bg-primary/10 rounded-lg p-1.5">
-                        <Users className="text-primary h-4 w-4" />
-                      </div>
-                      <span className="text-lg">DAO Member Registration</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {!isRegistered ? (
-                      <div className="space-y-4">
-                        <div className="from-warning/10 to-warning/5 border-warning/20 relative rounded-lg border bg-gradient-to-r p-4">
-                          <div className="absolute top-3 right-3">
-                            <div className="bg-warning h-2 w-2 animate-pulse rounded-full"></div>
-                          </div>
-                          <div className="mb-2 flex items-center space-x-2">
-                            <AlertCircle className="text-warning h-5 w-5" />
-                            <span className="text-warning text-base font-semibold">Not Registered</span>
-                          </div>
-                          <p className="text-muted-foreground text-sm leading-relaxed">
-                            Register to participate in DAO governance and receive revenue share.
-                          </p>
-                          <div className="mt-3 grid gap-3">
-                            <div className="text-foreground text-sm font-semibold">Registration Method</div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <Button
-                                type="button"
-                                variant={registrationMethod === "QUBIC" ? "default" : "outline"}
-                                className="h-9 w-full"
-                                onClick={() => setRegistrationMethod("QUBIC")}
-                              >
-                                Pay in QUBIC
-                              </Button>
-                              <Button
-                                type="button"
-                                variant={registrationMethod === "QXMR" ? "default" : "outline"}
-                                className="h-9 w-full"
-                                onClick={() => setRegistrationMethod("QXMR")}
-                              >
-                                Use QXMR
-                              </Button>
-                            </div>
+          <FadeInWhenVisible delay={0.15}>
+            {/* Raffle type folder tabs */}
+            <div className="folder-tabs">
+              {RAFFLE_TABS.map((tab) => {
+                const active = activeRaffleTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setActiveRaffleTab(tab.key)}
+                    className={`folder-tab${active ? " folder-tab--active" : ""}`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
 
-                            {registrationMethod === "QUBIC" ? (
-                              <div className="space-y-1">
-                                <div className="text-foreground text-sm font-semibold">
-                                  Stake: {QRAFFLE_REGISTER_AMOUNT.toLocaleString()} QUBIC
-                                </div>
-                                <div className="text-muted-foreground text-xs leading-relaxed">
-                                  This is a stake, not a fee. You'll get your {QRAFFLE_REGISTER_AMOUNT.toLocaleString()} QUBIC back when you logout (minus a small processing fee).
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="space-y-1">
-                                <div className="text-foreground text-sm font-semibold">
-                                  Stake: {QRAFFLE_QXMR_REGISTER_AMOUNT.toLocaleString()} QXMR share rights
-                                </div>
-                                <div className="text-muted-foreground text-xs leading-relaxed">
-                                  This is a stake, not a fee. Transfer share rights to the Qraffle contract. You'll get them back when you logout (minus a small processing fee).
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                          <Button
-                            onClick={() => setShowRegisterConfirm(true)}
-                            className="from-primary to-accent hover:from-primary/90 hover:to-accent/90 h-10 w-full bg-gradient-to-r text-base font-semibold shadow-lg"
-                          >
-                            <Zap className="mr-2 h-4 w-4" />
-                            Register in DAO
-                          </Button>
-                        </motion.div>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="from-success/10 to-success/5 border-success/20 relative rounded-lg border bg-gradient-to-r p-4">
-                          <div className="absolute top-3 right-3">
-                            <div className="bg-success h-2 w-2 animate-pulse rounded-full"></div>
-                          </div>
-                          <div className="mb-2 flex items-center space-x-2">
-                            <CheckCircle className="text-success h-5 w-5" />
-                            <span className="text-success text-base font-semibold">Registered</span>
-                          </div>
-                          <p className="text-muted-foreground text-sm leading-relaxed">
-                            You are registered and can participate in all DAO activities.
-                          </p>
-                        </div>
-
-                        <div className="text-muted-foreground text-sm leading-relaxed">
-                          You will receive {QRAFFLE_REGISTER_AMOUNT.toLocaleString()} QUBIC(Or{" "}
-                          {QRAFFLE_QXMR_REGISTER_AMOUNT.toLocaleString()} QXMR) back (minus a{" "}
-                          {QRAFFLE_LOGOUT_FEE.toLocaleString()} QUBIC(Or {QRAFFLE_QXMR_LOGOUT_FEE.toLocaleString()}{" "}
-                          QXMR) processing fee) upon logout.
-                        </div>
-
-                        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                          <Button
-                            variant="destructive"
-                            className="h-10 w-full text-base font-semibold shadow-lg"
-                            onClick={() => setShowLogoutConfirm(true)}
-                          >
-                            <AlertCircle className="mr-2 h-4 w-4" />
-                            Logout from DAO
-                          </Button>
-                        </motion.div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Entry Amount Submission */}
-                <Card className="from-card to-card/80 border-primary/10 transform bg-gradient-to-br shadow-lg transition-all duration-300 hover:scale-105">
+            {activeRaffleTab === "qu" && (
+              <div className="grid gap-4">
+                {/* Standard Qubic Raffle */}
+                <Card className="border-card-border bg-card rounded-tl-none shadow-lg">
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center space-x-2">
                       <div className="bg-primary/10 rounded-lg p-1.5">
@@ -586,12 +467,10 @@ const DAO: React.FC = () => {
                   </CardContent>
                 </Card>
               </div>
-            </StaggerItem>
+            )}
 
-            {/* Right Column - Governance */}
-            <StaggerItem className="lg:col-span-2">
-              {/* Active Proposals */}
-              <Card className="from-card to-card/80 border-accent/10 transform bg-gradient-to-br shadow-lg transition-all duration-300 hover:scale-105">
+            {activeRaffleTab === "token" && (
+              <Card className="border-card-border bg-card rounded-tl-none shadow-lg">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div>
@@ -784,8 +663,20 @@ const DAO: React.FC = () => {
                   )}
                 </CardContent>
               </Card>
-            </StaggerItem>
-          </StaggerChildren>
+            )}
+
+            {activeRaffleTab === "bundle" && (
+              <Card className="border-card-border bg-card rounded-tl-none shadow-lg">
+                <CardContent className="flex flex-col items-center justify-center px-6 py-16 text-center">
+                  <div className="bg-muted/20 mb-4 rounded-full p-6">
+                    <Package className="text-muted-foreground h-12 w-12" />
+                  </div>
+                  <h3 className="text-foreground mb-2 text-xl font-semibold">Bundle Raffle (Asset Raffle)</h3>
+                  <p className="text-muted-foreground max-w-md text-sm">Coming soon.</p>
+                </CardContent>
+              </Card>
+            )}
+          </FadeInWhenVisible>
         </div>
       </PageTransition>
 
@@ -793,79 +684,6 @@ const DAO: React.FC = () => {
       <CreateProposalModal open={isCreateProposalModalOpen} onOpenChange={setIsCreateProposalModalOpen} />
 
       {/* Confirmation Modals */}
-      <ConfirmationModal
-        open={showRegisterConfirm}
-        onOpenChange={setShowRegisterConfirm}
-        onConfirm={handleRegisterConfirm}
-        title="Confirm DAO Registration"
-        description="You are about to register in the Qraffle DAO. This will allow you to participate in governance, vote on proposals, and receive revenue share."
-        type="info"
-        confirmText="Register in DAO"
-        cancelText="Cancel"
-        details={[
-          {
-            label: "Method",
-            value: registrationMethod === "QUBIC" ? "Pay in QUBIC" : "Use QXMR",
-            icon: <Coins className="text-muted-foreground h-4 w-4" />,
-          },
-          ...(registrationMethod === "QUBIC"
-            ? [
-                {
-                  label: "Registration Fee",
-                  value: `${QRAFFLE_REGISTER_AMOUNT.toLocaleString()} QUBIC`,
-                  icon: <Coins className="text-muted-foreground h-4 w-4" />,
-                },
-              ]
-            : [
-                {
-                  label: "QXMR Required",
-                  value: `${QRAFFLE_QXMR_REGISTER_AMOUNT.toLocaleString()} QXMR shares`,
-                  icon: <Coins className="text-muted-foreground h-4 w-4" />,
-                },
-                {
-                  label: "Issuer",
-                  value: truncateMiddle(QXMR_ISSUER, 40),
-                  icon: <Shield className="text-muted-foreground h-4 w-4" />,
-                },
-                {
-                  label: "Asset Name",
-                  value: QXMR_ASSET_NAME,
-                  icon: <Hash className="text-muted-foreground h-4 w-4" />,
-                },
-              ]),
-          {
-            label: "Benefits",
-            value: "Governance voting & revenue share",
-            icon: <Users className="text-muted-foreground h-4 w-4" />,
-          },
-        ]}
-        warningMessage="Registration is permanent and cannot be undone. You will be able to participate in all DAO activities after registration."
-      />
-
-      <ConfirmationModal
-        open={showLogoutConfirm}
-        onOpenChange={setShowLogoutConfirm}
-        onConfirm={handleLogoutConfirm}
-        title="Confirm DAO Logout"
-        description="You are about to logout from the Qraffle DAO. This will remove your ability to participate in governance and receive revenue share, and a 5% logout fee will apply."
-        type="warning"
-        confirmText="Logout from DAO"
-        cancelText="Stay Registered"
-        details={[
-          {
-            label: "Logout Fee",
-            value: "5% processing fee",
-            icon: <Coins className="text-muted-foreground h-4 w-4" />,
-          },
-          {
-            label: "Impact",
-            value: "Loss of voting rights & revenue share",
-            icon: <AlertCircle className="text-muted-foreground h-4 w-4" />,
-          },
-        ]}
-        warningMessage="Logout is permanent. You will lose all DAO benefits and would need to register again to participate in governance."
-      />
-
       <ConfirmationModal
         open={showEntryAmountConfirm}
         onOpenChange={setShowEntryAmountConfirm}

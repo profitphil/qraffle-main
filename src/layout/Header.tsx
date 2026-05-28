@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { motion } from "framer-motion";
 import ConnectLink from "@/components/connect/ConnectLink";
+import DaoStatusMenu from "@/components/connect/DaoStatusMenu";
 
 const Header: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -36,21 +37,24 @@ const Header: React.FC = () => {
           {/* Desktop Navigation */}
           <nav className="hidden space-x-8 md:flex">
             {navigation.map((item) => (
-              <Link
-                key={item.name}
-                to={item.href}
-                className={`px-1 text-sm font-medium transition-colors ${
-                  isActive(item.href) ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-                }`}
-                style={{ borderRadius: 0, background: "none" }}
-              >
-                {item.name}
-              </Link>
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={`px-1 text-sm font-medium transition-colors ${
+                    isActive(item.href) ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  style={{ borderRadius: 0, background: "none" }}
+                >
+                  {item.name}
+                </Link>
             ))}
           </nav>
 
-          {/* Wallet Button */}
-          <ConnectLink darkMode={true} />
+          {/* DAO status + Wallet Button */}
+          <div className="flex items-center gap-2">
+            <DaoStatusMenu />
+            <ConnectLink darkMode={true} />
+          </div>
 
           {/* Mobile menu button */}
           <button
@@ -66,19 +70,19 @@ const Header: React.FC = () => {
           <div className="border-border bg-background border-t py-4 md:hidden">
             <div className="space-y-2">
               {navigation.map((item) => (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`block rounded-md px-3 py-2 text-base font-medium transition-colors ${
-                    isActive(item.href)
-                      ? "bg-accent text-accent-foreground"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
-                >
-                  {item.name}
-                </Link>
-              ))}
+                  <Link
+                    key={item.name}
+                    to={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`block rounded-md px-3 py-2 text-base font-medium transition-colors ${
+                      isActive(item.href)
+                        ? "bg-accent text-accent-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                  >
+                    {item.name}
+                  </Link>
+                ))}
               <ConnectLink darkMode={true} />
             </div>
           </div>

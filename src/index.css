@@ -222,3 +222,73 @@ html {
     @apply bg-background text-foreground;
   }
 }
+
+/* DAO raffle folder-style tabs (outlined, slanted edges) */
+.folder-tabs {
+  display: flex;
+  align-items: flex-end;
+  padding-left: 1.5rem;
+  position: relative;
+  z-index: 10;
+}
+
+.folder-tab {
+  position: relative;
+  margin: 0 0.875rem;
+  padding: 1rem 0.75rem 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  border: 0;
+  border-top: 1px solid var(--card-border);
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+/* Slanted left/right edges built from skewed, bordered pseudo-elements */
+.folder-tab::before,
+.folder-tab::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  bottom: 0;
+  width: 16px;
+  background: inherit;
+  border-top: 1px solid var(--card-border);
+}
+
+.folder-tab::before {
+  left: -12px;
+  border-left: 1px solid var(--card-border);
+  transform: skewX(-15deg);
+  transform-origin: bottom right;
+}
+
+.folder-tab::after {
+  right: -12px;
+  border-right: 1px solid var(--card-border);
+  transform: skewX(15deg);
+  transform-origin: bottom left;
+}
+
+.folder-tab:hover {
+  color: var(--foreground);
+}
+
+/* Active tab adopts the panel color and opens into the panel below */
+.folder-tab--active {
+  background: var(--card);
+  color: var(--foreground);
+  margin-bottom: -1px;
+  z-index: 20;
+}
+
+.folder-tab--active::before,
+.folder-tab--active::after {
+  bottom: -1px;
+}
