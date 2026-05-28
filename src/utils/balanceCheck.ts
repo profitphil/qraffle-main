@@ -154,26 +154,33 @@ export const BalanceChecks = {
       );
 
       const tokenAssetsAt1 = matchingTokenAssets.filter((asset) => asset.managingContractIndex === 1);
+      const tokenAssetsAt19 = matchingTokenAssets.filter((asset) => asset.managingContractIndex === 19);
       const balanceAt1 = tokenAssetsAt1.reduce(
         (sum, asset) => sum + (typeof asset.amount === "number" ? asset.amount : 0),
         0,
       );
+      const balanceAt19 = tokenAssetsAt19.reduce(
+        (sum, asset) => sum + (typeof asset.amount === "number" ? asset.amount : 0),
+        0,
+      );
+      const totalAvailableBalance = balanceAt1 + balanceAt19;
 
       console.log("Balance at index 1:", balanceAt1);
+      console.log("Balance at index 19:", balanceAt19);
       console.log("All matching tokens across all indices:", matchingTokenAssets);
 
-      const displayTokenName = tokenAssetsAt1[0]?.assetName || tokenRaffleInfo.tokenName;
+      const displayTokenName = tokenAssetsAt19[0]?.assetName || tokenAssetsAt1[0]?.assetName || tokenRaffleInfo.tokenName;
 
-      const hasEnoughBalance = balanceAt1 >= requiredAmount;
-      const shortfall = Math.max(0, requiredAmount - balanceAt1);
+      const hasEnoughBalance = totalAvailableBalance >= requiredAmount;
+      const shortfall = Math.max(0, requiredAmount - totalAvailableBalance);
 
       if (!hasEnoughBalance) {
         toast.error(
-          `Insufficient ${displayTokenName} balance for token raffle. Required: ${requiredAmount.toLocaleString()}, Available: ${balanceAt1.toLocaleString()}`,
+          `Insufficient ${displayTokenName} balance for token raffle. Required: ${requiredAmount.toLocaleString()}, Available: ${totalAvailableBalance.toLocaleString()}`,
         );
         return {
           hasEnoughBalance: false,
-          currentBalance: balanceAt1,
+          currentBalance: totalAvailableBalance,
           requiredAmount,
           shortfall,
           tokenName: displayTokenName,
@@ -181,19 +188,23 @@ export const BalanceChecks = {
         };
       }
 
-      const transferAmount = requiredAmount;
-      console.log(`Sufficient balance at managingContractIndex 1: ${balanceAt1}`);
-      console.log(`Transfering ${transferAmount} from index 1 rights to index 19`);
+      const transferAmount = Math.max(0, requiredAmount - balanceAt19);
+      const needsTransfer = transferAmount > 0;
+      console.log(`Sufficient total token balance: ${totalAvailableBalance}`);
+      console.log(`Token balance at managingContractIndex 19: ${balanceAt19}`);
+      if (needsTransfer) {
+        console.log(`Transfering ${transferAmount} from index 1 rights to index 19`);
+      }
 
       return {
         hasEnoughBalance: true,
-        currentBalance: balanceAt1,
+        currentBalance: totalAvailableBalance,
         requiredAmount,
         shortfall: 0,
         tokenName: displayTokenName,
         tokenIssuer: normalizedTokenIssuer,
-        needsApproval: true,
-        needsTransfer: true,
+        needsApproval: needsTransfer,
+        needsTransfer,
         transferAmount,
       };
     } catch (error) {

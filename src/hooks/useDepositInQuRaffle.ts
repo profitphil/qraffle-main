@@ -19,6 +19,7 @@ export const useDepositInQuRaffle = () => {
 
   const handleDeposit = async (amount: number) => {
     if (!wallet) return false;
+    const isWalletConnect = wallet.connectType === "walletconnect";
 
     const totalRequiredAmount = amount + MIN_TX_FEE_BUFFER;
 
@@ -51,11 +52,14 @@ export const useDepositInQuRaffle = () => {
         tickOffset: settings.tickOffset,
         fetchTickInfo,
         retryContext: "QuRaffleDeposit",
-        minTickOffset: MIN_RAFFLE_DEPOSIT_TICK_OFFSET,
-        execute: async ({ tickInfo, targetTick: nextTargetTick }) => {
+        minTickOffset: isWalletConnect ? 18 : MIN_RAFFLE_DEPOSIT_TICK_OFFSET,
+        maxTickOffset: isWalletConnect ? 28 : undefined,
+        maxAttempts: isWalletConnect ? 6 : undefined,
+        execute: async ({ tickInfo, targetTick: nextTargetTick, checkpoint }) => {
           currentEpoch = tickInfo.epoch;
           const tx = await depositeInQuRaffle(wallet.publicKey, amount, nextTargetTick || 0);
           const signedTx = await getSignedTx(tx);
+          await checkpoint();
           return await broadcastTx(signedTx.tx);
         },
       });

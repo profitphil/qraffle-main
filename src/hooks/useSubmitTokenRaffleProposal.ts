@@ -56,9 +56,10 @@ export const useSubmitTokenRaffleProposal = () => {
         minTickOffset: isWalletConnect ? 15 : 8,
         maxTickOffset: isWalletConnect ? 25 : 20,
         maxAttempts: isWalletConnect ? 6 : 4,
-        execute: async ({ targetTick: nextTargetTick }) => {
+        execute: async ({ targetTick: nextTargetTick, checkpoint }) => {
           const tx = await submitProposal(wallet.publicKey, issuer, encodedAssetName, entryAmount, nextTargetTick || 0);
           const signedTx = await getSignedTx(tx);
+          await checkpoint();
           return await broadcastTx(signedTx.tx);
         },
       });

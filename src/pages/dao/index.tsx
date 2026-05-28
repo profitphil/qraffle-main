@@ -847,26 +847,16 @@ const DAO: React.FC = () => {
         onOpenChange={setShowLogoutConfirm}
         onConfirm={handleLogoutConfirm}
         title="Confirm DAO Logout"
-        description="You are about to logout from the Qraffle DAO. This will remove your ability to participate in governance and receive revenue share."
+        description="You are about to logout from the Qraffle DAO. This will remove your ability to participate in governance and receive revenue share, and a 5% logout fee will apply."
         type="warning"
         confirmText="Logout from DAO"
         cancelText="Stay Registered"
         details={[
-          // {
-          //   label: "Registration Amount",
-          //   value: `${QRAFFLE_REGISTER_AMOUNT.toLocaleString()} QUBIC`,
-          //   icon: <Coins className="text-muted-foreground h-4 w-4" />,
-          // },
-          // {
-          //   label: "Processing Fee",
-          //   value: `${QRAFFLE_LOGOUT_FEE.toLocaleString()} QUBIC`,
-          //   icon: <Coins className="text-muted-foreground h-4 w-4" />,
-          // },
-          // {
-          //   label: "You Will Receive",
-          //   value: `${(QRAFFLE_REGISTER_AMOUNT - QRAFFLE_LOGOUT_FEE).toLocaleString()} QUBIC`,
-          //   icon: <TrendingUp className="text-success h-4 w-4" />,
-          // },
+          {
+            label: "Logout Fee",
+            value: "5% processing fee",
+            icon: <Coins className="text-muted-foreground h-4 w-4" />,
+          },
           {
             label: "Impact",
             value: "Loss of voting rights & revenue share",

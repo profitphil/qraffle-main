@@ -1,10 +1,10 @@
 import { toast } from "sonner";
 import { useAtom } from "jotai";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { monitoringTasksAtom, monitorStrategyAtom, useTxMonitor, resultAtom } from "@/store/txMonitor";
 import { latestTickAtom } from "@/store/rpc";
-import { fetchLatestTick, fetchTxStatus } from "@/services/rpc.service";
+import { fetchLatestTick, fetchTxStatus, fetchTickTxs } from "@/services/rpc.service";
 import { fetchTickEvents } from "@/services/rpc.service";
 import { decodeQraffleLog } from "@/services/log.service";
 import { addParticipation } from "@/utils/participationStorage";
@@ -32,6 +32,7 @@ const useGlobalTxMonitor = () => {
   const monitoringToastIdRef = useRef<string | number | null>(null);
   const v2CooldownUntilRef = useRef<Record<string, number>>({});
   const v2NotFoundCountRef = useRef<Record<string, number>>({});
+  const [visibilityWakeToken, setVisibilityWakeToken] = useState(0);
 
   const resultHandlers = useResultHandlers(setResult);
   const MONITOR_TIMEOUT_MS = 120000;
@@ -64,6 +65,20 @@ const useGlobalTxMonitor = () => {
     const rawMoneyFlew = (status as { moneyFlew?: unknown }).moneyFlew;
     return typeof rawMoneyFlew === "boolean" ? rawMoneyFlew : null;
   };
+  const getTickTransactionMoneyFlew = async (txHash: string, targetTick: number): Promise<boolean | null> => {
+    try {
+      const tickTxs = await fetchTickTxs(targetTick);
+      const normalizedTxHash = txHash.toLowerCase();
+      const match = tickTxs.find((tx) => tx.transaction?.txId?.toLowerCase() === normalizedTxHash);
+      if (!match) return null;
+      return typeof match.moneyFlew === "boolean" ? match.moneyFlew : null;
+    } catch (error) {
+      if (!isTransientRpcError(error) && !isTxStatusNotFoundError(error)) {
+        console.error("V2 Monitoring: failed to fetch tick transactions", error);
+      }
+      return null;
+    }
+  };
   const hasDefinitiveFailureSignal = (status: unknown): boolean => {
     if (!status || typeof status !== "object") return false;
     const parsed = status as Record<string, unknown>;
@@ -73,6 +88,32 @@ const useGlobalTxMonitor = () => {
       (value) => typeof value === "string" && /(fail|failed|reject|rejected|invalid|error)/i.test(value),
     );
   };
+
+  // Wake the monitor when the tab returns to foreground (mobile browsers
+  // throttle / suspend setInterval while a wallet app is open for signing).
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!isMonitoring) return;
+      // Reset any in-flight backoffs so the next cycle polls immediately.
+      v2CooldownUntilRef.current = {};
+      // Refresh the cached latest tick (used by v1/v3) right away.
+      fetchLatestTick()
+        .then((tick) => setLatestTick(tick))
+        .catch((error) => console.warn("visibility wake: failed to fetch latest tick", error));
+      // Bump a state token so v2/v3 effects re-run a poll cycle now.
+      setVisibilityWakeToken((n) => n + 1);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    window.addEventListener("pageshow", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      window.removeEventListener("pageshow", onVisible);
+    };
+  }, [isMonitoring, setLatestTick]);
 
   useEffect(() => {
     if (!isMonitoring) {
@@ -216,6 +257,7 @@ const useGlobalTxMonitor = () => {
 
           if (monitorStrategy === "v2" && task.canRecoverFromMoneyFlewFalse) {
             let checkerSuccess = false;
+            let tickMoneyFlew: boolean | null = null;
             try {
               const checkerRetryAttempts = 3;
               for (let attempt = 1; attempt <= checkerRetryAttempts; attempt++) {
@@ -229,11 +271,15 @@ const useGlobalTxMonitor = () => {
               console.error("V2 Monitoring: checker failed on timeout fallback", checkerError);
             }
 
+            if (!checkerSuccess && task.txHash) {
+              tickMoneyFlew = await getTickTransactionMoneyFlew(task.txHash, task.targetTick);
+            }
+
             stopMonitoring(taskId);
             delete v2CooldownUntilRef.current[taskId];
             delete v2NotFoundCountRef.current[taskId];
 
-            if (checkerSuccess) {
+            if (checkerSuccess || tickMoneyFlew === true) {
               await task.onSuccess?.();
               await resultHandlers.onSuccess();
               return;
@@ -250,7 +296,7 @@ const useGlobalTxMonitor = () => {
     }, 1000);
 
     return () => clearInterval(timeoutIntervalId);
-  }, [isMonitoring, monitoringTasks, monitorStrategy, stopMonitoring, resultHandlers]);
+  }, [isMonitoring, monitoringTasks, monitorStrategy, stopMonitoring, resultHandlers, visibilityWakeToken]);
 
   useEffect(() => {
     if (!isMonitoring) return;
@@ -401,6 +447,27 @@ const useGlobalTxMonitor = () => {
                 }
               }
 
+              if (task.txHash) {
+                const tickMoneyFlew = await getTickTransactionMoneyFlew(task.txHash, task.targetTick);
+                if (tickMoneyFlew === true) {
+                  console.log("V2 Monitoring: tick transaction confirmed success after tx-status 404");
+                  stopMonitoring(taskId);
+                  delete v2CooldownUntilRef.current[taskId];
+                  delete v2NotFoundCountRef.current[taskId];
+                  await onSuccess();
+                  continue;
+                }
+
+                if (tickMoneyFlew === false && !task.canRecoverFromMoneyFlewFalse) {
+                  console.error("V2 Monitoring: tick transaction reported failed after tx-status 404");
+                  stopMonitoring(taskId);
+                  delete v2CooldownUntilRef.current[taskId];
+                  delete v2NotFoundCountRef.current[taskId];
+                  await onFailure();
+                  continue;
+                }
+              }
+
               const isOldEnoughToFail = Date.now() - (task.createdAt ?? Date.now()) > 30000;
               if (isOldEnoughToFail && !task.canRecoverFromMoneyFlewFalse) {
                 console.error("V2 Monitoring: tx-status 404 and tx is stale by age, failing task");
@@ -466,7 +533,7 @@ const useGlobalTxMonitor = () => {
       }, 1500);
       return () => clearInterval(v2IntervalId);
     }
-  }, [isMonitoring, monitoringTasks, monitorStrategy, stopMonitoring, resultHandlers]);
+  }, [isMonitoring, monitoringTasks, monitorStrategy, stopMonitoring, resultHandlers, visibilityWakeToken]);
 
   /**
    * v3: using log - best choice
@@ -574,7 +641,7 @@ const useGlobalTxMonitor = () => {
         console.error("Error in monitoring process:", error);
       });
     }
-  }, [isMonitoring, monitoringTasks, latestTick, monitorStrategy, stopMonitoring, resultHandlers, setResult]);
+  }, [isMonitoring, monitoringTasks, latestTick, monitorStrategy, stopMonitoring, resultHandlers, setResult, visibilityWakeToken]);
 
   useEffect(() => {
     if (!isMonitoring) return;

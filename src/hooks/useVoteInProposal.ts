@@ -45,15 +45,20 @@ export const useVoteInProposal = () => {
 
     let targetTick = 0;
     let result: Awaited<ReturnType<typeof broadcastTx>>;
+    const isWalletConnect = wallet.connectType === "walletconnect";
 
     try {
       const submission = await submitWithFreshTick({
         tickOffset: settings.tickOffset,
         fetchTickInfo,
         retryContext: "VoteInProposal",
-        execute: async ({ targetTick: nextTargetTick }) => {
+        minTickOffset: isWalletConnect ? 18 : undefined,
+        maxTickOffset: isWalletConnect ? 28 : undefined,
+        maxAttempts: isWalletConnect ? 6 : undefined,
+        execute: async ({ targetTick: nextTargetTick, checkpoint }) => {
           const tx = await voteInProposal(wallet.publicKey, indexOfProposal, yes, nextTargetTick || 0);
           const signedTx = await getSignedTx(tx);
+          await checkpoint();
           return await broadcastTx(signedTx.tx);
         },
       });

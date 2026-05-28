@@ -37,15 +37,20 @@ export const useSubmitEntryAmount = () => {
 
     let targetTick = 0;
     let result: Awaited<ReturnType<typeof broadcastTx>>;
+    const isWalletConnect = wallet.connectType === "walletconnect";
 
     try {
       const submission = await submitWithFreshTick({
         tickOffset: settings.tickOffset,
         fetchTickInfo,
         retryContext: "SubmitEntryAmount",
-        execute: async ({ targetTick: nextTargetTick }) => {
+        minTickOffset: isWalletConnect ? 18 : undefined,
+        maxTickOffset: isWalletConnect ? 28 : undefined,
+        maxAttempts: isWalletConnect ? 6 : undefined,
+        execute: async ({ targetTick: nextTargetTick, checkpoint }) => {
           const tx = await submitEntryAmount(wallet.publicKey, amount, nextTargetTick || 0);
           const signedTx = await getSignedTx(tx);
+          await checkpoint();
           return await broadcastTx(signedTx.tx);
         },
       });

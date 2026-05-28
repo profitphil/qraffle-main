@@ -46,16 +46,16 @@ const useTransferShareManagementRights = () => {
     fallback?: () => Promise<void>;
     isFromQX?: boolean;
     onTransferConfirmed?: (params: { txHash: string; targetTick: number }) => Promise<void> | void;
-  }) => {
+  }): Promise<{ success: boolean; txHash?: string; targetTick?: number }> => {
     if (!wallet) {
-      console.error("Please connect your wallet");
-      return;
+      toast.error("Please connect your wallet");
+      return { success: false };
     }
 
     // Check balance before proceeding
     const balanceCheck = await BalanceChecks.forTransferShareRights(wallet.publicKey);
     if (!balanceCheck.hasEnoughBalance) {
-      return;
+      return { success: false };
     }
 
     try {
@@ -66,16 +66,20 @@ const useTransferShareManagementRights = () => {
         if (fallback) {
           await fallback();
         }
-        return;
+        return { success: true };
       }
       let targetTick = 0;
       let res: Awaited<ReturnType<typeof broadcastTx>> | null = null;
 
+      const isWalletConnect = wallet.connectType === "walletconnect";
       const submission = await submitWithFreshTick({
         tickOffset: settings.tickOffset,
         fetchTickInfo,
         retryContext: "TransferShareRights",
-        execute: async ({ targetTick: nextTargetTick }) => {
+        minTickOffset: isWalletConnect ? 18 : undefined,
+        maxTickOffset: isWalletConnect ? 28 : undefined,
+        maxAttempts: isWalletConnect ? 6 : undefined,
+        execute: async ({ targetTick: nextTargetTick, checkpoint }) => {
           const transferShareTx = isFromQX
             ? await transferShareManagementRightsFromQX(
                 wallet.publicKey,
@@ -99,6 +103,7 @@ const useTransferShareManagementRights = () => {
               );
 
           const signedTransferShareTx = await getSignedTx(transferShareTx);
+          await checkpoint();
           return await broadcastTx(signedTransferShareTx.tx);
         },
       });
@@ -111,39 +116,56 @@ const useTransferShareManagementRights = () => {
       }
 
       const taskId = `transfer-share-rights-${targetTick}-${Date.now()}`;
+      const ownedWallet = wallet;
       const checker = async () => {
-        if (!wallet) return false;
         const expectedAmount = isFromQX ? amount : targetContractOriginAmount + amount;
         return await checkTransferShareRights(assetName, isFromQX ? contractIndex : 1, expectedAmount);
       };
 
-      const onSuccess = async () => {
-        toast.success("Transfer share rights successfully");
-        await onTransferConfirmed?.({ txHash: res.transactionId, targetTick });
-        if (fallback) {
-          await fallback();
-        }
-      };
+      const broadcastResult = res;
 
-      const onFailure = async () => {
-        toast.error("Transfer share rights failed");
-      };
+      return await new Promise<{ success: boolean; txHash?: string; targetTick?: number }>((resolve) => {
+        const onSuccess = async () => {
+          toast.success("Transfer share rights successfully");
+          try {
+            await onTransferConfirmed?.({ txHash: broadcastResult.transactionId, targetTick });
+          } catch (cbError) {
+            console.error("onTransferConfirmed callback failed", cbError);
+          }
+          try {
+            if (fallback) {
+              await fallback();
+            }
+          } catch (fbError) {
+            console.error("Transfer fallback failed", fbError);
+            resolve({ success: false, txHash: broadcastResult.transactionId, targetTick });
+            return;
+          }
+          resolve({ success: true, txHash: broadcastResult.transactionId, targetTick });
+        };
 
-      // Use v2 monitoring to properly detect success/failure via moneyFlew field
-      startMonitoring(
-        taskId,
-        {
-          checker,
-          onSuccess,
-          onFailure,
-          targetTick,
-          txHash: res.transactionId,
-          canRecoverFromMoneyFlewFalse: true,
-          timeoutMs: 45000,
-          fastTrack: true,
-        },
-        "v2",
-      );
+        const onFailure = async () => {
+          toast.error("Transfer share rights failed");
+          resolve({ success: false, txHash: broadcastResult.transactionId, targetTick });
+        };
+
+        // Use v2 monitoring to properly detect success/failure via moneyFlew field
+        startMonitoring(
+          taskId,
+          {
+            checker,
+            onSuccess,
+            onFailure,
+            targetTick,
+            txHash: broadcastResult.transactionId,
+            canRecoverFromMoneyFlewFalse: true,
+            timeoutMs: 45000,
+            fastTrack: true,
+          },
+          "v2",
+        );
+        void ownedWallet;
+      });
     } catch (error) {
       if (isRetryableTickError(error)) {
         toast.error("Transfer failed due to RPC/tick timing. Please wait a few seconds and try again.");
@@ -151,7 +173,7 @@ const useTransferShareManagementRights = () => {
         toast.error("Error transferring share rights");
       }
       console.error("Error transferring share rights", error);
-      return;
+      return { success: false };
     }
   };
 
