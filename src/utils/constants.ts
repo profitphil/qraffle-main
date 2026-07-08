@@ -17,4 +17,4 @@ export const QRAFFLE_MAX_EPOCH = 65536;
 export const QRAFFLE_MAX_PROPOSAL_EPOCH = 128;
 export const QRAFFLE_MAX_MEMBER = 65536;
 
-export const DEFAULT_TICK_OFFSET = 10;
+export const DEFAULT_TICK_OFFSET = 20;

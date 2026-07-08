@@ -1,8 +1,8 @@
 import { DEFAULT_TICK_OFFSET } from "@/utils/constants";
 import { atom } from "jotai";
 
-const MIN_TICK_OFFSET = 8;
-const MAX_TICK_OFFSET = 20;
+const MIN_TICK_OFFSET = 15;
+const MAX_TICK_OFFSET = 30;
 
 export type Settings = {
   tickOffset: number;
