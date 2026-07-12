@@ -53,7 +53,7 @@ type EpochTotals = {
 };
 
 const EARLIEST_EPOCH = 192;
-const RECENT_EPOCH_COUNT = 5;
+const RECENT_EPOCH_COUNT = 1;
 const SHAREHOLDERS_COUNT = 676;
 
 const DAO_REGISTERS_OVERRIDE_BY_EPOCH: Record<number, number> = {
@@ -551,8 +551,7 @@ const Winners: React.FC = () => {
             <div className="mb-6 text-center">
               <h1 className="text-foreground mb-4 text-4xl font-bold">Raffles History</h1>
               <p className="text-muted-foreground mx-auto max-w-3xl">
-                Showing the latest {RECENT_EPOCH_COUNT} completed epochs ({recentStartEpoch} - {endEpoch}). Use the
-                selector below to view any other epoch.
+                Showing the latest completed epoch ({endEpoch}). Use the selector below to view any other epoch.
               </p>
             </div>
           </FadeInWhenVisible>
@@ -562,7 +561,7 @@ const Winners: React.FC = () => {
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2">
                   <Trophy className="h-5 w-5" />
-                  <span>Completed Epochs</span>
+                  <span>Latest Completed Epoch</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>

@@ -66,7 +66,7 @@ export const detectSnaps = async () => {
   if (window.ethereum?.detected) {
     for (const provider of window.ethereum.detected) {
       try {
-        await getSnaps(provider);
+        await getSnaps(provider as any);
         if (window.ethereum.setProvider) {
           window.ethereum.setProvider(provider);
         }
@@ -82,7 +82,7 @@ export const detectSnaps = async () => {
   if (window.ethereum?.providers) {
     for (const provider of window.ethereum.providers) {
       try {
-        await getSnaps(provider);
+        await getSnaps(provider as any);
         resolvedMetaMaskProvider = provider;
         try {
           window.ethereum = provider;

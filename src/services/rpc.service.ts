@@ -18,8 +18,8 @@ import { uint8ArrayToBase64 } from "@/utils";
 import axios from "axios";
 
 
-const RPC_URL = import.meta.env.VITE_RPC_URL;
-const QEVENT_URL = import.meta.env.VITE_QEVENT_URL;
+const RPC_URL = import.meta.env.VITE_RPC_URL || "https://rpc.qubic.org";
+const QEVENT_URL = import.meta.env.VITE_QEVENT_URL || "https://dev01.qubic.org";
 
 const rpc = axios.create({
   baseURL: RPC_URL,

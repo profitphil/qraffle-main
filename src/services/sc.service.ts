@@ -4,6 +4,8 @@ import { QubicHelper } from "@qubic-lib/qubic-ts-library/dist/qubicHelper";
 import { createSCTx } from "./tx.service";
 import { fetchQuerySC } from "./rpc.service";
 import {
+  QRAFFLE_ASSET_RAFFLE_PROPOSAL_FEE,
+  QRAFFLE_MAX_ASSETS_PER_BUNDLE,
   QRAFFLE_REGISTER_AMOUNT,
   TRANSFER_SHARE_MANAGEMENT_RIGHTS_FEE,
 } from "@/utils/constants";
@@ -287,6 +289,202 @@ export const getQuRaffleEntryAverageAmount = async () => {
   };
 };
 
+// ── Asset (bundle) raffle types ──────────────────────────────────────────────
+// Byte offsets below mirror the natural C++ struct layout in QRaffle.h
+// (feature/qraffle-asset): ids are 32 bytes, uint64s 8-byte aligned.
+
+export interface AssetRaffle {
+  creator: string;
+  reservePriceQu: number;
+  entryTicketQu: number;
+  totalTicketsPaidQu: number;
+  numberOfBuyers: number;
+  totalTickets: number;
+  bundleSize: number;
+  epoch: number;
+  returnCode: number;
+}
+
+export interface AssetRaffleBundleItem {
+  assetIssuer: string;
+  assetName: string;
+  numberOfShares: number;
+  returnCode: number;
+}
+
+export interface AssetRaffleBuyer {
+  buyer: string;
+  ticketCount: number;
+  returnCode: number;
+}
+
+export interface EndedAssetRaffle {
+  creator: string;
+  epochWinner: string;
+  reservePriceQu: number;
+  entryTicketQu: number;
+  grossPoolQu: number;
+  creatorPaidQu: number;
+  totalTickets: number;
+  numberOfBuyers: number;
+  bundleSize: number;
+  epoch: number;
+  reserveMet: boolean;
+  returnCode: number;
+}
+
+export interface AssetRaffleAnalytics {
+  totalAssetRaffleProposalFees: number;
+  totalAssetRaffleCreatorPaid: number;
+  totalAssetRaffleRefunded: number;
+  numberOfActiveAssetRaffles: number;
+  numberOfEndedAssetRaffles: number;
+  totalAssetRafflesCreated: number;
+  totalAssetRafflesSucceeded: number;
+  totalAssetRafflesFailed: number;
+  returnCode: number;
+}
+
+export interface AssetRaffleBundleItemInput {
+  issuer: string;
+  assetName: string;
+  numberOfShares: number;
+}
+
+// ── Asset raffle query functions ─────────────────────────────────────────────
+
+export const getActiveAssetRaffle = async (indexOfAssetRaffle: number): Promise<AssetRaffle | null> => {
+  const view = createDataView(4);
+  view.setUint32(0, indexOfAssetRaffle, true);
+
+  const res = await fetchQuerySC({
+    contractIndex: SC_INDEX,
+    inputType: 10,
+    inputSize: 4,
+    requestData: uint8ArrayToBase64(new Uint8Array(view.buffer)),
+  });
+
+  const values = getResponseValues(res);
+  if (!values) return null;
+
+  return {
+    creator: await values.getID(0),
+    reservePriceQu: values.getUint64(32),
+    entryTicketQu: values.getUint64(40),
+    totalTicketsPaidQu: values.getUint64(48),
+    numberOfBuyers: values.getUint32(56),
+    totalTickets: values.getUint32(60),
+    bundleSize: values.getUint32(64),
+    epoch: values.getUint32(68),
+    returnCode: values.getUint32(72),
+  };
+};
+
+export const getActiveAssetRaffleBundleItem = async (
+  indexOfAssetRaffle: number,
+  itemIndex: number,
+): Promise<AssetRaffleBundleItem | null> => {
+  const view = createDataView(8);
+  view.setUint32(0, indexOfAssetRaffle, true);
+  view.setUint32(4, itemIndex, true);
+
+  const res = await fetchQuerySC({
+    contractIndex: SC_INDEX,
+    inputType: 11,
+    inputSize: 8,
+    requestData: uint8ArrayToBase64(new Uint8Array(view.buffer)),
+  });
+
+  const values = getResponseValues(res);
+  if (!values) return null;
+
+  return {
+    assetIssuer: await values.getID(0),
+    assetName: assetNameConvert(values.getUint64(32)) as string,
+    numberOfShares: values.getUint64(40),
+    returnCode: values.getUint32(48),
+  };
+};
+
+export const getActiveAssetRaffleBuyer = async (
+  indexOfAssetRaffle: number,
+  buyerIndex: number,
+): Promise<AssetRaffleBuyer | null> => {
+  const view = createDataView(8);
+  view.setUint32(0, indexOfAssetRaffle, true);
+  view.setUint32(4, buyerIndex, true);
+
+  const res = await fetchQuerySC({
+    contractIndex: SC_INDEX,
+    inputType: 12,
+    inputSize: 8,
+    requestData: uint8ArrayToBase64(new Uint8Array(view.buffer)),
+  });
+
+  const values = getResponseValues(res);
+  if (!values) return null;
+
+  return {
+    buyer: await values.getID(0),
+    ticketCount: values.getUint32(32),
+    returnCode: values.getUint32(36),
+  };
+};
+
+export const getEndedAssetRaffle = async (indexOfRaffle: number): Promise<EndedAssetRaffle | null> => {
+  const view = createDataView(4);
+  view.setUint32(0, indexOfRaffle, true);
+
+  const res = await fetchQuerySC({
+    contractIndex: SC_INDEX,
+    inputType: 13,
+    inputSize: 4,
+    requestData: uint8ArrayToBase64(new Uint8Array(view.buffer)),
+  });
+
+  const values = getResponseValues(res);
+  if (!values) return null;
+
+  return {
+    creator: await values.getID(0),
+    epochWinner: await values.getID(32),
+    reservePriceQu: values.getUint64(64),
+    entryTicketQu: values.getUint64(72),
+    grossPoolQu: values.getUint64(80),
+    creatorPaidQu: values.getUint64(88),
+    totalTickets: values.getUint32(96),
+    numberOfBuyers: values.getUint32(100),
+    bundleSize: values.getUint32(104),
+    epoch: values.getUint32(108),
+    reserveMet: values.getUint8(112) === 1,
+    returnCode: values.getUint32(116),
+  };
+};
+
+export const getAssetRaffleAnalytics = async (): Promise<AssetRaffleAnalytics | null> => {
+  const res = await fetchQuerySC({
+    contractIndex: SC_INDEX,
+    inputType: 14,
+    inputSize: 0,
+    requestData: "",
+  });
+
+  const values = getResponseValues(res);
+  if (!values) return null;
+
+  return {
+    totalAssetRaffleProposalFees: values.getUint64(0),
+    totalAssetRaffleCreatorPaid: values.getUint64(8),
+    totalAssetRaffleRefunded: values.getUint64(16),
+    numberOfActiveAssetRaffles: values.getUint32(24),
+    numberOfEndedAssetRaffles: values.getUint32(28),
+    totalAssetRafflesCreated: values.getUint32(32),
+    totalAssetRafflesSucceeded: values.getUint32(36),
+    totalAssetRafflesFailed: values.getUint32(40),
+    returnCode: values.getUint32(44),
+  };
+};
+
 // Transaction functions
 export const registerInSystem = async (sourceID: string, tick: number, useQXMR: boolean) => {
   const payload = createPayload([{ data: useQXMR === true ? 1 : 0, type: "uint8" }]);
@@ -376,4 +574,58 @@ export const transferShareManagementRightsFromQRaffle = async (
     tick,
     payload,
   );
+};
+
+// createAssetRaffle_input is a fixed 216-byte struct: 4 bundle slots of
+// (issuer id + assetName u64 + numberOfShares s64), bundleSize u32, 4 bytes of
+// struct padding, then reservePriceQu u64 and entryTicketQu u64. Unused bundle
+// slots are zero-filled; only [0..bundleSize) are read by the contract.
+export const createAssetRaffle = async (
+  sourceID: string,
+  bundleItems: AssetRaffleBundleItemInput[],
+  reservePriceQu: number,
+  entryTicketQu: number,
+  tick: number,
+) => {
+  const fields: Parameters<typeof createPayload>[0] = [];
+  for (let i = 0; i < QRAFFLE_MAX_ASSETS_PER_BUNDLE; i++) {
+    const item = bundleItems[i];
+    fields.push({ data: item ? item.issuer : new Uint8Array(32), type: "id" });
+    fields.push({ data: item ? (assetNameConvert(item.assetName) as number) : 0, type: "bigint64" });
+    fields.push({ data: item ? item.numberOfShares : 0, type: "bigint64" });
+  }
+  fields.push({ data: bundleItems.length, type: "uint32" });
+  fields.push({ data: 0, type: "uint32" }); // struct padding before the uint64 fields
+  fields.push({ data: reservePriceQu, type: "bigint64" });
+  fields.push({ data: entryTicketQu, type: "bigint64" });
+
+  const payload = createPayload(fields);
+  return await createSCTx(
+    sourceID,
+    SC_INDEX,
+    9,
+    payload.getPackageSize(),
+    QRAFFLE_ASSET_RAFFLE_PROPOSAL_FEE,
+    tick,
+    payload,
+  );
+};
+
+export const buyAssetRaffleTicket = async (
+  sourceID: string,
+  indexOfAssetRaffle: number,
+  numberOfTickets: number,
+  totalCostQu: number,
+  tick: number,
+) => {
+  const payload = createPayload([
+    { data: indexOfAssetRaffle, type: "uint32" },
+    { data: numberOfTickets, type: "uint32" },
+  ]);
+  return await createSCTx(sourceID, SC_INDEX, 10, payload.getPackageSize(), totalCostQu, tick, payload);
+};
+
+export const cancelAssetRaffle = async (sourceID: string, indexOfAssetRaffle: number, tick: number) => {
+  const payload = createPayload([{ data: indexOfAssetRaffle, type: "uint32" }]);
+  return await createSCTx(sourceID, SC_INDEX, 11, payload.getPackageSize(), 0, tick, payload);
 };

@@ -7,6 +7,7 @@ import { PageTransition, FadeInWhenVisible, StaggerChildren } from "@/components
 import { motion } from "framer-motion";
 import SEO from "@/components/SEO";
 import NewBadge from "@/components/ui/new-badge";
+import ActiveAssetRaffles from "@/components/ActiveAssetRaffles";
 import { useAtom } from "jotai";
 import { tickInfoAtom } from "@/store/rpc";
 import { useRaffles } from "@/hooks/useRaffles";
@@ -290,6 +291,8 @@ const Raffles: React.FC = () => {
                   )}
                 </div>
               </motion.div>
+
+              <ActiveAssetRaffles />
 
               <div className="bg-card border-card-border w-full rounded-xl border p-6 shadow-lg">
                 <h2 className="text-foreground mb-4 text-xl font-bold">Raffles History</h2>

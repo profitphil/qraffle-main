@@ -17,4 +17,13 @@ export const QRAFFLE_MAX_EPOCH = 65536;
 export const QRAFFLE_MAX_PROPOSAL_EPOCH = 128;
 export const QRAFFLE_MAX_MEMBER = 65536;
 
+// Asset (bundle) raffle — mirrors QRaffle.h constants
+export const QRAFFLE_ASSET_RAFFLE_PROPOSAL_FEE = 500_000; // non-refundable, per creation
+export const QRAFFLE_MAX_ASSETS_PER_BUNDLE = 4;
+export const QRAFFLE_MAX_ASSET_RAFFLES_PER_CREATOR = 2;
+export const QRAFFLE_MAX_ASSET_RAFFLES_PER_EPOCH = 64;
+export const QRAFFLE_MAX_TICKETS_PER_BUYER = 100;
+export const QRAFFLE_MIN_ASSET_TICKET_AMOUNT = 1_000_000;
+export const QRAFFLE_MAX_ASSET_TICKET_AMOUNT = 1_000_000_000_000;
+
 export const DEFAULT_TICK_OFFSET = 20;

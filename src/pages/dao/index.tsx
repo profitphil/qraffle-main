@@ -14,7 +14,6 @@ import {
   Activity,
   Plus,
   Hash,
-  Package,
 } from "lucide-react";
 import { getTimeToNewEpoch } from "@/utils";
 import { Button } from "@/components/ui/button";
@@ -37,6 +36,7 @@ import { useAllRegisters } from "@/hooks/useAllRegisters";
 import { useSubmitEntryAmount } from "@/hooks/useSubmitEntryAmount";
 import { useVoteInProposal } from "@/hooks/useVoteInProposal";
 import CreateProposalModal from "@/components/CreateProposalModal";
+import BundleRaffleTab from "@/components/BundleRaffleTab";
 import ConfirmationModal from "@/components/ConfirmationModal";
 import { useProposals } from "@/hooks/useProposals";
 import { getAnalytics, getQuRaffleEntryAverageAmount } from "@/services/sc.service";
@@ -665,17 +665,7 @@ const DAO: React.FC = () => {
               </Card>
             )}
 
-            {activeRaffleTab === "bundle" && (
-              <Card className="border-card-border bg-card rounded-tl-none shadow-lg">
-                <CardContent className="flex flex-col items-center justify-center px-6 py-16 text-center">
-                  <div className="bg-muted/20 mb-4 rounded-full p-6">
-                    <Package className="text-muted-foreground h-12 w-12" />
-                  </div>
-                  <h3 className="text-foreground mb-2 text-xl font-semibold">Bundle Raffle (Asset Raffle)</h3>
-                  <p className="text-muted-foreground max-w-md text-sm">Coming soon.</p>
-                </CardContent>
-              </Card>
-            )}
+            {activeRaffleTab === "bundle" && <BundleRaffleTab isRegistered={!!isRegistered} />}
           </FadeInWhenVisible>
         </div>
       </PageTransition>
