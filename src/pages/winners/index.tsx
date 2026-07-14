@@ -258,6 +258,39 @@ const EpochCard: React.FC<EpochCardProps> = ({
     return a.localeCompare(b);
   });
 
+  const currencyBreakdowns = currencyKeys.map((currency) => {
+    const totals = calcBreakdown(totalsByCurrency[currency] || 0, epoch);
+    const daoDivisor = typeof epochDaoRegisters === "number" ? epochDaoRegisters : daoRegisters;
+    const daoPerMember = daoDivisor > 0 ? Math.floor(Number(totals.daoDividends) / daoDivisor) : 0;
+    const shareholderPerMember = Math.floor(Number(totals.shareholderDividends) / shareholdersCount);
+
+    const cells = [
+      {
+        label: `Winner (${winnerPercent}%)`,
+        value: totals.winner,
+        sub: undefined as string | undefined,
+        cls: "bg-yellow-50 text-yellow-700",
+      },
+      { label: `Burn (${feeRates.burn}%)`, value: totals.burn, sub: undefined, cls: "bg-red-50 text-red-700" },
+      {
+        label: `DAO (${feeRates.dao}%)`,
+        value: totals.daoDividends,
+        sub: `${daoPerMember.toLocaleString()} ea`,
+        cls: "bg-blue-50 text-blue-700",
+      },
+      {
+        label: `Shareholders (${feeRates.shareholder}%)`,
+        value: totals.shareholderDividends,
+        sub: `${shareholderPerMember.toLocaleString()} ea`,
+        cls: "bg-green-50 text-green-700",
+      },
+      { label: `Charity (${feeRates.charity}%)`, value: totals.charity, sub: undefined, cls: "bg-purple-50 text-purple-700" },
+      { label: `Fee (${feeRates.fee}%)`, value: totals.fee, sub: undefined, cls: "bg-gray-50 text-gray-700" },
+    ];
+
+    return { currency, totals, cells };
+  });
+
   return (
     <div className="overflow-hidden rounded-xl border">
       <div
@@ -287,81 +320,76 @@ const EpochCard: React.FC<EpochCardProps> = ({
         </div>
 
         <div className="flex flex-col gap-2">
-          <div className="w-full max-w-full overflow-x-auto">
+          <div className="hidden w-full max-w-full overflow-x-auto sm:block">
             <div className="min-w-[720px]">
-              <div className="grid grid-cols-7 gap-2 text-[11px] leading-tight sm:text-xs">
+              <div className="grid grid-cols-7 gap-2 text-xs leading-tight">
                 <div className="flex min-h-8 items-center justify-center rounded-md bg-muted px-2 py-1 text-center text-foreground">
                   <div className="font-semibold">Currency</div>
                 </div>
-                <div className="flex min-h-8 items-center justify-center rounded-md bg-yellow-50 px-2 py-1 text-center text-yellow-700">
-                  <div className="font-semibold">Winner ({winnerPercent}%)</div>
-                </div>
-                <div className="flex min-h-8 items-center justify-center rounded-md bg-red-50 px-2 py-1 text-center text-red-700">
-                  <div className="font-semibold">Burn ({feeRates.burn}%)</div>
-                </div>
-                <div className="flex min-h-8 items-center justify-center rounded-md bg-blue-50 px-2 py-1 text-center text-blue-700">
-                  <div className="font-semibold">DAO ({feeRates.dao}%)</div>
-                </div>
-                <div className="flex min-h-8 items-center justify-center rounded-md bg-green-50 px-2 py-1 text-center text-green-700">
-                  <div className="font-semibold">Shareholders ({feeRates.shareholder}%)</div>
-                </div>
-                <div className="flex min-h-8 items-center justify-center rounded-md bg-purple-50 px-2 py-1 text-center text-purple-700">
-                  <div className="font-semibold">Charity ({feeRates.charity}%)</div>
-                </div>
-                <div className="flex min-h-8 items-center justify-center rounded-md bg-gray-50 px-2 py-1 text-center text-gray-700">
-                  <div className="font-semibold">Fee ({feeRates.fee}%)</div>
-                </div>
+                {currencyBreakdowns[0]?.cells.map((cell) => (
+                  <div
+                    key={cell.label}
+                    className={cn("flex min-h-8 items-center justify-center rounded-md px-2 py-1 text-center", cell.cls)}
+                  >
+                    <div className="font-semibold">{cell.label}</div>
+                  </div>
+                ))}
               </div>
 
               <div className="mt-2 grid gap-2">
-                {currencyKeys.map((currency) => {
-                  const totals = calcBreakdown(totalsByCurrency[currency] || 0, epoch);
-                  const daoDivisor = typeof epochDaoRegisters === "number" ? epochDaoRegisters : daoRegisters;
-                  const daoPerMember = daoDivisor > 0 ? Math.floor(Number(totals.daoDividends) / daoDivisor) : 0;
-                  const shareholderPerMember = Math.floor(Number(totals.shareholderDividends) / shareholdersCount);
-
-                  return (
-                    <div key={currency} className="grid grid-cols-7 gap-2 text-[11px] leading-tight sm:text-xs">
-                      <div className="flex min-h-10 flex-col items-center justify-center rounded-md bg-muted px-2 py-1.5 text-center text-foreground">
-                        <div className="font-semibold">{currency}</div>
-                        <div className="text-muted-foreground">{totals.totalEntries.toLocaleString()}</div>
-                      </div>
-                      <div className="flex min-h-10 items-center justify-center rounded-md bg-yellow-50 px-2 py-1.5 text-center text-yellow-700">
-                        <div className="font-semibold">{totals.winner.toLocaleString()}</div>
-                      </div>
-                      <div className="flex min-h-10 items-center justify-center rounded-md bg-red-50 px-2 py-1.5 text-center text-red-700">
-                        <div className="font-semibold">{totals.burn.toLocaleString()}</div>
-                      </div>
-                      <div className="flex min-h-10 flex-col items-center justify-center rounded-md bg-blue-50 px-2 py-1.5 text-center text-blue-700">
-                        <div className="font-semibold">{totals.daoDividends.toLocaleString()}</div>
-                        <div className="text-[10px] text-blue-700/80 sm:text-[11px]">
-                          {Math.floor(daoPerMember).toLocaleString()} ea
-                        </div>
-                      </div>
-                      <div className="flex min-h-10 flex-col items-center justify-center rounded-md bg-green-50 px-2 py-1.5 text-center text-green-700">
-                        <div className="font-semibold">{totals.shareholderDividends.toLocaleString()}</div>
-                        <div className="text-[10px] text-green-700/80 sm:text-[11px]">
-                          {Math.floor(shareholderPerMember).toLocaleString()} ea
-                        </div>
-                      </div>
-                      <div className="flex min-h-10 items-center justify-center rounded-md bg-purple-50 px-2 py-1.5 text-center text-purple-700">
-                        <div className="font-semibold">{totals.charity.toLocaleString()}</div>
-                      </div>
-                      <div className="flex min-h-10 items-center justify-center rounded-md bg-gray-50 px-2 py-1.5 text-center text-gray-700">
-                        <div className="font-semibold">{totals.fee.toLocaleString()}</div>
-                      </div>
+                {currencyBreakdowns.map(({ currency, totals, cells }) => (
+                  <div key={currency} className="grid grid-cols-7 gap-2 text-xs leading-tight">
+                    <div className="flex min-h-10 flex-col items-center justify-center rounded-md bg-muted px-2 py-1.5 text-center text-foreground">
+                      <div className="font-semibold">{currency}</div>
+                      <div className="text-muted-foreground">{totals.totalEntries.toLocaleString()}</div>
                     </div>
-                  );
-                })}
+                    {cells.map((cell) => (
+                      <div
+                        key={cell.label}
+                        className={cn(
+                          "flex min-h-10 flex-col items-center justify-center rounded-md px-2 py-1.5 text-center",
+                          cell.cls,
+                        )}
+                      >
+                        <div className="font-semibold">{cell.value.toLocaleString()}</div>
+                        {cell.sub && <div className="text-[11px] opacity-80">{cell.sub}</div>}
+                      </div>
+                    ))}
+                  </div>
+                ))}
               </div>
             </div>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:hidden">
+            {currencyBreakdowns.map(({ currency, totals, cells }) => (
+              <div key={currency} className="flex flex-col gap-2">
+                <div className="flex items-baseline justify-between rounded-md bg-muted px-3 py-2">
+                  <span className="text-foreground text-xs font-semibold">{currency}</span>
+                  <span className="text-muted-foreground text-xs">{totals.totalEntries.toLocaleString()}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {cells.map((cell) => (
+                    <div key={cell.label} className={cn("rounded-md px-2.5 py-2", cell.cls)}>
+                      <div className="text-[10px] font-medium opacity-80">{cell.label}</div>
+                      <div className="text-xs font-semibold">
+                        {cell.value.toLocaleString()}
+                        {cell.sub && (
+                          <span className="ml-1 text-[10px] font-normal whitespace-nowrap opacity-80">({cell.sub})</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
       {expanded && (
       <div className="divide-y">
-        <div className="px-4 py-2">
+        <div className="hidden px-4 py-2 sm:block">
           <div className="grid grid-cols-[1fr_72px_96px_96px] gap-3 text-xs tabular-nums">
             <div />
             <div className="text-muted-foreground flex items-center justify-center text-center">Entries</div>
@@ -371,7 +399,7 @@ const EpochCard: React.FC<EpochCardProps> = ({
         </div>
         {epochRows.map((row) => (
           <Link key={row.key} to={row.href} className="block">
-            <div className="hover:bg-muted/30 grid grid-cols-[1fr_72px_96px_96px] items-center gap-3 px-4 py-4 transition-colors">
+            <div className="hover:bg-muted/30 flex flex-col gap-3 px-4 py-4 transition-colors sm:grid sm:grid-cols-[1fr_72px_96px_96px] sm:items-center">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-r from-yellow-400 to-yellow-500">
                   <Crown className="h-4 w-4 text-white" />
@@ -386,13 +414,34 @@ const EpochCard: React.FC<EpochCardProps> = ({
                 </div>
               </div>
 
-              <div className="text-foreground flex items-center justify-center text-center text-xs font-semibold tabular-nums">
+              <div className="bg-muted/40 grid grid-cols-3 gap-2 rounded-md px-3 py-2 text-center sm:hidden">
+                <div>
+                  <div className="text-muted-foreground text-[10px]">Entries</div>
+                  <div className="text-foreground text-xs font-semibold tabular-nums">
+                    {row.numberOfMembers.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground text-[10px]">Entry</div>
+                  <div className="text-foreground text-xs font-semibold tabular-nums">
+                    {row.entryAmount.toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground text-[10px]">Pool</div>
+                  <div className="text-foreground text-xs font-semibold tabular-nums">
+                    {row.totalPool.toLocaleString()}
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-foreground hidden items-center justify-center text-center text-xs font-semibold tabular-nums sm:flex">
                 {row.numberOfMembers.toLocaleString()}
               </div>
-              <div className="text-foreground flex items-center justify-center text-center text-xs font-semibold tabular-nums">
+              <div className="text-foreground hidden items-center justify-center text-center text-xs font-semibold tabular-nums sm:flex">
                 {row.entryAmount.toLocaleString()}
               </div>
-              <div className="text-foreground flex items-center justify-center text-center text-xs font-semibold tabular-nums">
+              <div className="text-foreground hidden items-center justify-center text-center text-xs font-semibold tabular-nums sm:flex">
                 {row.totalPool.toLocaleString()}
               </div>
             </div>
@@ -581,9 +630,9 @@ const Winners: React.FC = () => {
                     </p>
                   </div>
                 ) : (
-                  <StaggerChildren staggerDelay={0.08} useInView={false} className="grid gap-4">
+                  <StaggerChildren staggerDelay={0.08} useInView={false} className="grid grid-cols-1 gap-4">
                     {epochs.map((epoch) => (
-                      <StaggerItem key={epoch}>
+                      <StaggerItem key={epoch} className="min-w-0">
                         <EpochCard
                           epoch={epoch}
                           epochRows={rowsByEpoch[epoch] || []}
