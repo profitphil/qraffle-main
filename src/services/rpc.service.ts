@@ -65,7 +65,18 @@ export const fetchAssetsBalance = async (publicId: string, assetName: string, co
 // all assets ownership contract address, assets name, and amount
 export const fetchAssetsOwnership = async (publicId: string): Promise<AssetsOwnership[]> => {
   const assetsBalanceRes = await rpc.get(`/v1/assets/${publicId}/owned`);
-  return assetsBalanceRes.data;
+  const ownedAssets: OwnedAssets[] = assetsBalanceRes.data?.ownedAssets;
+  if (!Array.isArray(ownedAssets)) {
+    console.warn("fetchAssetsOwnership: Invalid assets ownership response");
+    return [];
+  }
+  return ownedAssets.map((asset) => ({
+    ownerIdentity: asset.data.ownerIdentity,
+    managingContractIndex: asset.data.managingContractIndex,
+    amount: Number(asset.data.numberOfUnits),
+    assetName: asset.data.issuedAsset.name,
+    issuer: asset.data.issuedAsset.issuerIdentity,
+  }));
 };
 
 export const broadcastTx = async (tx: Uint8Array) => {
