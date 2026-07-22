@@ -32,6 +32,8 @@ const useGlobalTxMonitor = () => {
   const monitoringToastIdRef = useRef<string | number | null>(null);
   const v2CooldownUntilRef = useRef<Record<string, number>>({});
   const v2NotFoundCountRef = useRef<Record<string, number>>({});
+  const v2TimeoutInFlightRef = useRef<Set<string>>(new Set());
+  const v2TimeoutTickCheckAfterRef = useRef<Record<string, number>>({});
   const [visibilityWakeToken, setVisibilityWakeToken] = useState(0);
 
   const resultHandlers = useResultHandlers(setResult);
@@ -73,7 +75,10 @@ const useGlobalTxMonitor = () => {
       if (!match) return null;
       return typeof match.moneyFlew === "boolean" ? match.moneyFlew : null;
     } catch (error) {
-      if (!isTransientRpcError(error) && !isTxStatusNotFoundError(error)) {
+      // 400 = archiver hasn't processed the target tick yet (tick still in the
+      // future); 404 = tx not indexed yet. Both are pending states, not errors.
+      const statusCode = getHttpStatusCode(error);
+      if (statusCode !== 400 && !isTransientRpcError(error) && !isTxStatusNotFoundError(error)) {
         console.error("V2 Monitoring: failed to fetch tick transactions", error);
       }
       return null;
@@ -119,6 +124,7 @@ const useGlobalTxMonitor = () => {
     if (!isMonitoring) {
       v2CooldownUntilRef.current = {};
       v2NotFoundCountRef.current = {};
+      v2TimeoutTickCheckAfterRef.current = {};
       return;
     }
 
@@ -127,6 +133,7 @@ const useGlobalTxMonitor = () => {
       if (!activeTaskIds.has(taskId)) {
         delete v2CooldownUntilRef.current[taskId];
         delete v2NotFoundCountRef.current[taskId];
+        delete v2TimeoutTickCheckAfterRef.current[taskId];
       }
     });
   }, [isMonitoring, monitoringTasks]);
@@ -253,44 +260,78 @@ const useGlobalTxMonitor = () => {
             ? task.timeoutMs
             : MONITOR_TIMEOUT_MS;
         if (Date.now() - task.createdAt > taskTimeoutMs) {
-          console.error(`Monitoring timeout for task ${taskId}`);
-
-          if (monitorStrategy === "v2" && task.canRecoverFromMoneyFlewFalse) {
-            let checkerSuccess = false;
-            let tickMoneyFlew: boolean | null = null;
-            try {
-              const checkerRetryAttempts = 3;
-              for (let attempt = 1; attempt <= checkerRetryAttempts; attempt++) {
-                checkerSuccess = await task.checker();
-                if (checkerSuccess) break;
-                if (attempt < checkerRetryAttempts) {
-                  await sleep(1500);
+          // Guard against the 1s interval re-entering while a previous timeout
+          // handler for this task is still awaiting checker retries.
+          if (v2TimeoutInFlightRef.current.has(taskId)) return;
+          v2TimeoutInFlightRef.current.add(taskId);
+          try {
+            // Don't declare timeout while the chain hasn't passed the target
+            // tick yet — slow ticks (esp. near epoch transition) can outlast
+            // the wall-clock timeout even though the tx still has a chance.
+            const hardCapMs = Math.max(taskTimeoutMs * 4, MONITOR_TIMEOUT_MS);
+            if (Date.now() - task.createdAt < hardCapMs) {
+              // Throttle the tick probe to avoid hammering the rate-limited RPC
+              // from this 1s interval while the task is overdue.
+              const nextTickCheckAfter = v2TimeoutTickCheckAfterRef.current[taskId] ?? 0;
+              if (Date.now() < nextTickCheckAfter) return;
+              try {
+                const currentTick = await fetchLatestTick();
+                if (currentTick <= task.targetTick + 2) {
+                  v2TimeoutTickCheckAfterRef.current[taskId] = Date.now() + 4000;
+                  return; // tx outcome not decided on-chain yet; keep monitoring
                 }
+                delete v2TimeoutTickCheckAfterRef.current[taskId];
+              } catch {
+                v2TimeoutTickCheckAfterRef.current[taskId] = Date.now() + 4000;
+                return; // RPC hiccup; re-evaluate after the backoff
               }
-            } catch (checkerError) {
-              console.error("V2 Monitoring: checker failed on timeout fallback", checkerError);
             }
 
-            if (!checkerSuccess && task.txHash) {
-              tickMoneyFlew = await getTickTransactionMoneyFlew(task.txHash, task.targetTick);
+            console.error(`Monitoring timeout for task ${taskId}`);
+
+            if (monitorStrategy === "v2" && task.canRecoverFromMoneyFlewFalse) {
+              let checkerSuccess = false;
+              let tickMoneyFlew: boolean | null = null;
+              try {
+                const checkerRetryAttempts = 3;
+                for (let attempt = 1; attempt <= checkerRetryAttempts; attempt++) {
+                  checkerSuccess = await task.checker();
+                  if (checkerSuccess) break;
+                  if (attempt < checkerRetryAttempts) {
+                    await sleep(1500);
+                  }
+                }
+              } catch (checkerError) {
+                console.error("V2 Monitoring: checker failed on timeout fallback", checkerError);
+              }
+
+              if (!checkerSuccess && task.txHash) {
+                tickMoneyFlew = await getTickTransactionMoneyFlew(task.txHash, task.targetTick);
+              }
+
+              stopMonitoring(taskId);
+              delete v2CooldownUntilRef.current[taskId];
+              delete v2NotFoundCountRef.current[taskId];
+
+              if (checkerSuccess || tickMoneyFlew === true) {
+                await task.onSuccess?.();
+                await resultHandlers.onSuccess();
+                return;
+              }
+
+              await task.onFailure?.();
+              await resultHandlers.onFailure();
+              return;
             }
 
             stopMonitoring(taskId);
             delete v2CooldownUntilRef.current[taskId];
             delete v2NotFoundCountRef.current[taskId];
-
-            if (checkerSuccess || tickMoneyFlew === true) {
-              await task.onSuccess?.();
-              await resultHandlers.onSuccess();
-              return;
-            }
+            await task.onFailure?.();
+            await resultHandlers.onFailure();
+          } finally {
+            v2TimeoutInFlightRef.current.delete(taskId);
           }
-
-          stopMonitoring(taskId);
-          delete v2CooldownUntilRef.current[taskId];
-          delete v2NotFoundCountRef.current[taskId];
-          await task.onFailure?.();
-          await resultHandlers.onFailure();
         }
       });
     }, 1000);
