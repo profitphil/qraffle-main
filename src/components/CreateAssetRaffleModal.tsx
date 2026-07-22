@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import ConfirmationModal from "@/components/ConfirmationModal";
 import { useCreateAssetRaffle } from "@/hooks/useCreateAssetRaffle";
 import { useQubicConnect } from "@/components/connect/QubicConnectContext";
-import { ASSET_ISSUER_OPTIONS, ASSET_TO_ISSUER, normalizeAssetName } from "@/utils/assetList";
+import { BUNDLE_ASSET_OPTIONS, BUNDLE_EXCLUDED_ASSETS, ASSET_TO_ISSUER, normalizeAssetName } from "@/utils/assetList";
 import {
   QRAFFLE_ASSET_RAFFLE_PROPOSAL_FEE,
   QRAFFLE_MAX_ASSETS_PER_BUNDLE,
@@ -55,7 +55,9 @@ const CreateAssetRaffleModal: React.FC<CreateAssetRaffleModalProps> = ({ open, o
   };
 
   const itemIsValid = (item: BundleItemForm) =>
-    ASSET_TO_ISSUER.has(normalizeAssetName(item.assetName)) && parseInt(item.numberOfShares) > 0;
+    ASSET_TO_ISSUER.has(normalizeAssetName(item.assetName)) &&
+    !BUNDLE_EXCLUDED_ASSETS.has(normalizeAssetName(item.assetName)) &&
+    parseInt(item.numberOfShares) > 0;
 
   const hasDuplicateAssets = new Set(items.map((i) => normalizeAssetName(i.assetName))).size !== items.length;
 
@@ -140,7 +142,7 @@ const CreateAssetRaffleModal: React.FC<CreateAssetRaffleModalProps> = ({ open, o
                       <SelectValue placeholder="Select asset..." />
                     </SelectTrigger>
                     <SelectContent className="border-border bg-card text-card-foreground max-h-72 shadow-xl">
-                      {ASSET_ISSUER_OPTIONS.map((option) => (
+                      {BUNDLE_ASSET_OPTIONS.map((option) => (
                         <SelectItem key={option.asset} value={option.asset} className="bg-card text-card-foreground">
                           {option.asset}
                         </SelectItem>

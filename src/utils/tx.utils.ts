@@ -133,13 +133,15 @@ export const generateSeed = (): string => {
 };
 
 /**
- * Converts an asset name between string <-> number representation.
+ * Converts an asset name between string <-> uint64 representation.
  * - If input is a string: encodes as ASCII bytes in *little-endian* order (first char is lowest byte).
- * - If input is a number: decodes as ASCII bytes in *little-endian* order (lowest byte is first char),
- *   and stops at the first null-byte (0), to avoid doubling/trailing chars.
+ *   Returns a bigint — 7-char names exceed Number.MAX_SAFE_INTEGER, and narrowing
+ *   to a JS number silently corrupts them (e.g. "QRAFFLE" becomes "PRAFFLE").
+ * - If input is a number or bigint: decodes as ASCII bytes in *little-endian* order
+ *   (lowest byte is first char), and stops at the first null-byte (0).
  */
-export function assetNameConvert(input: string | number): number | string {
-  // String to Number logic
+export function assetNameConvert(input: string | number | bigint): bigint | string {
+  // String to uint64 logic
   if (typeof input === "string") {
     if (input.length > 7) {
       throw new Error("Input string is too long");
@@ -150,10 +152,10 @@ export function assetNameConvert(input: string | number): number | string {
       view.setUint8(i, input.charCodeAt(i));
     }
     // The Qubic convention (see assetNameToId, little-endian)
-    return Number(view.getBigUint64(0, true));
+    return view.getBigUint64(0, true);
   }
-  // Number to String logic
-  if (typeof input === "number") {
+  // uint64 to String logic
+  if (typeof input === "number" || typeof input === "bigint") {
     const buffer = new ArrayBuffer(8);
     const view = new DataView(buffer);
     view.setBigUint64(0, BigInt(input), true); // little-endian

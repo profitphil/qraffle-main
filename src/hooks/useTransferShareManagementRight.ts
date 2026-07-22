@@ -85,7 +85,7 @@ const useTransferShareManagementRights = () => {
                 wallet.publicKey,
                 {
                   issuer: assetIssuer,
-                  assetName: assetNameConvert(assetName) as number,
+                  assetName: assetNameConvert(assetName) as bigint,
                 },
                 requiredTransferAmount,
                 contractIndex,
@@ -95,7 +95,7 @@ const useTransferShareManagementRights = () => {
                 wallet.publicKey,
                 {
                   issuer: assetIssuer,
-                  assetName: assetNameConvert(assetName) as number,
+                  assetName: assetNameConvert(assetName) as bigint,
                 },
                 amount,
                 contractIndex,

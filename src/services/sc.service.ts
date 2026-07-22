@@ -23,6 +23,9 @@ const getResponseValues = (res: any) => {
 
   return {
     getUint64: (offset: number) => Number(responseView.getBigUint64(offset, true)),
+    // For uint64 fields that pack ASCII (asset names): full 64-bit precision.
+    // 7-char names exceed Number.MAX_SAFE_INTEGER and corrupt via getUint64.
+    getBigUint64: (offset: number) => responseView.getBigUint64(offset, true),
     getUint32: (offset: number) => responseView.getUint32(offset, true),
     getUint8: (offset: number) => responseView.getUint8(offset),
     getID: (offset: number) => qHelper.getIdentity(responseArray.slice(offset, offset + 32)),
@@ -153,7 +156,7 @@ export const getActiveProposal = async (indexOfProposal: number) => {
   return {
     tokenIssuer: await values.getID(0),
     proposer: await values.getID(32),
-    tokenName: assetNameConvert(values.getUint64(64)),
+    tokenName: assetNameConvert(values.getBigUint64(64)),
     entryAmount: values.getUint64(72),
     nYes: values.getUint32(80),
     nNo: values.getUint32(84),
@@ -177,7 +180,7 @@ export const getEndedTokenRaffle = async (indexOfRaffle: number): Promise<TokenR
   return {
     epochWinner: await values.getID(0),
     tokenIssuer: await values.getID(32),
-    tokenName: assetNameConvert(values.getUint64(64)) as string,
+    tokenName: assetNameConvert(values.getBigUint64(64)) as string,
     entryAmount: values.getUint64(72),
     numberOfMembers: values.getUint32(80),
     winnerIndex: values.getUint32(84),
@@ -225,7 +228,7 @@ export const getActiveTokenRaffle = async (indexOfTokenRaffle: number) => {
 
   return {
     tokenIssuer: await values.getID(0),
-    tokenName: assetNameConvert(values.getUint64(32)) as string,
+    tokenName: assetNameConvert(values.getBigUint64(32)) as string,
     entryAmount: values.getUint64(40),
     numberOfMembers: values.getUint32(48),
   };
@@ -400,7 +403,7 @@ export const getActiveAssetRaffleBundleItem = async (
 
   return {
     assetIssuer: await values.getID(0),
-    assetName: assetNameConvert(values.getUint64(32)) as string,
+    assetName: assetNameConvert(values.getBigUint64(32)) as string,
     numberOfShares: values.getUint64(40),
     returnCode: values.getUint32(48),
   };
@@ -535,7 +538,7 @@ export const depositeInTokenRaffle = async (sourceID: string, indexOfTokenRaffle
 
 export const transferShareManagementRightsFromQX = async (
   sourceID: string,
-  asset: { issuer: string; assetName: number },
+  asset: { issuer: string; assetName: number | bigint },
   numberOfShares: number,
   newManagingContractIndex: number,
   tick: number,
@@ -553,7 +556,7 @@ export const transferShareManagementRightsFromQX = async (
 
 export const transferShareManagementRightsFromQRaffle = async (
   sourceID: string,
-  asset: { issuer: string; assetName: number },
+  asset: { issuer: string; assetName: number | bigint },
   numberOfShares: number,
   newManagingContractIndex: number,
   tick: number,
@@ -591,7 +594,7 @@ export const createAssetRaffle = async (
   for (let i = 0; i < QRAFFLE_MAX_ASSETS_PER_BUNDLE; i++) {
     const item = bundleItems[i];
     fields.push({ data: item ? item.issuer : new Uint8Array(32), type: "id" });
-    fields.push({ data: item ? (assetNameConvert(item.assetName) as number) : 0, type: "bigint64" });
+    fields.push({ data: item ? (assetNameConvert(item.assetName) as bigint) : 0, type: "bigint64" });
     fields.push({ data: item ? item.numberOfShares : 0, type: "bigint64" });
   }
   fields.push({ data: bundleItems.length, type: "uint32" });
