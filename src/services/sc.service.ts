@@ -156,7 +156,7 @@ export const getActiveProposal = async (indexOfProposal: number) => {
   return {
     tokenIssuer: await values.getID(0),
     proposer: await values.getID(32),
-    tokenName: assetNameConvert(values.getBigUint64(64)),
+    tokenName: assetNameConvert(values.getBigUint64(64)) as string,
     entryAmount: values.getUint64(72),
     nYes: values.getUint32(80),
     nNo: values.getUint32(84),
