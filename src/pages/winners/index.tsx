@@ -17,6 +17,7 @@ import { Trophy, Crown, ChevronDown, Package, XCircle, Sparkles } from "lucide-r
 import { tickInfoAtom } from "@/store/rpc";
 import { useRaffles } from "@/hooks/useRaffles";
 import { useEndedAssetRaffles, type EndedAssetRaffleRow } from "@/hooks/useEndedAssetRaffles";
+import { useAssetRaffleBundles } from "@/hooks/useAssetRaffleBundles";
 import { truncateMiddle } from "@/utils/base.utils";
 import { cn } from "@/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -24,6 +25,7 @@ import { getAnalytics } from "@/services/sc.service";
 import { fetchArchiverStatus, fetchEpochTicks, fetchTxHistory } from "@/services/rpc.service";
 import { QubicHelper } from "@qubic-lib/qubic-ts-library/dist/qubicHelper";
 import {
+  QRAFFLE_ASSET_RAFFLE_PROPOSAL_FEE,
   QRAFFLE_BURN_FEE,
   QRAFFLE_CHARITY_FEE,
   QRAFFLE_FEE,
@@ -225,6 +227,8 @@ const AssetRaffleStat: React.FC<{ label: string; value: number; accent?: boolean
 );
 
 const AssetRaffleFeature: React.FC<{ rows: EndedAssetRaffleRow[] }> = ({ rows }) => {
+  const { bundlesByIndex } = useAssetRaffleBundles(rows);
+
   if (rows.length === 0) return null;
 
   // Winners (reserve met) always sort above failed/refunded raffles.
@@ -280,6 +284,24 @@ const AssetRaffleFeature: React.FC<{ rows: EndedAssetRaffleRow[] }> = ({ rows })
                   </div>
                 ) : (
                   <div className="text-muted-foreground text-xs sm:text-sm">Reserve not met — buyers refunded</div>
+                )}
+                {bundlesByIndex[row.index] && bundlesByIndex[row.index].length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {bundlesByIndex[row.index].map((item, i) => (
+                      <span
+                        key={`${row.index}-${item.assetName}-${i}`}
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold",
+                          row.reserveMet
+                            ? "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-200"
+                            : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {item.assetName}
+                        <span className="opacity-70">×{item.numberOfShares.toLocaleString()}</span>
+                      </span>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
@@ -350,6 +372,24 @@ const EpochCard: React.FC<EpochCardProps> = ({
     {} as Record<string, number>,
   );
 
+  // Asset bundle raffles pay out in QUBIC and feed the same dividend buckets.
+  // - Succeeded raffles distribute their ticket pool (grossPoolQu) with the exact
+  //   Qu-raffle split (Burn 5 / DAO 5 / Shareholders 8 / Charity 1 / Fee 1 / ~80% creator),
+  //   so we fold that pool into the QUBIC total and let the standard breakdown apply.
+  // - Every ended raffle (succeeded or refunded) paid a 500K creation fee, split 50%
+  //   to shareholders and 50% to the DAO — added on top of the pool-derived dividends.
+  const succeededAssetGross = assetRows.reduce((sum, r) => (r.reserveMet ? sum + r.grossPoolQu : sum), 0);
+  const assetCreationFees = assetRows.length * QRAFFLE_ASSET_RAFFLE_PROPOSAL_FEE;
+  const assetShareholderFromFees = assetRows.reduce(
+    (sum) => sum + Math.floor(QRAFFLE_ASSET_RAFFLE_PROPOSAL_FEE / 2),
+    0,
+  );
+  const assetDaoFromFees = assetCreationFees - assetShareholderFromFees;
+
+  if (assetRows.length > 0) {
+    totalsByCurrency["QUBIC"] = (totalsByCurrency["QUBIC"] || 0) + succeededAssetGross;
+  }
+
   const currencyKeys = Object.keys(totalsByCurrency).sort((a, b) => {
     if (a === "QUBIC") return -1;
     if (b === "QUBIC") return 1;
@@ -357,34 +397,47 @@ const EpochCard: React.FC<EpochCardProps> = ({
   });
 
   const currencyBreakdowns = currencyKeys.map((currency) => {
-    const totals = calcBreakdown(totalsByCurrency[currency] || 0, epoch);
+    const base = calcBreakdown(totalsByCurrency[currency] || 0, epoch);
+    // Add the 50/50 creation-fee dividends to QUBIC only (pool-derived buckets are
+    // already covered by folding succeededAssetGross into the QUBIC total above).
+    const isQubic = currency === "QUBIC" && assetRows.length > 0;
+    const totals = {
+      ...base,
+      totalEntries: base.totalEntries + (isQubic ? assetCreationFees : 0),
+      daoDividends: base.daoDividends + (isQubic ? assetDaoFromFees : 0),
+      shareholderDividends: base.shareholderDividends + (isQubic ? assetShareholderFromFees : 0),
+    };
     const daoDivisor = typeof epochDaoRegisters === "number" ? epochDaoRegisters : daoRegisters;
     const daoPerMember = daoDivisor > 0 ? Math.floor(Number(totals.daoDividends) / daoDivisor) : 0;
     const shareholderPerMember = Math.floor(Number(totals.shareholderDividends) / shareholdersCount);
 
+    // Columns are ordered by percentage, highest first (stable order breaks ties).
     const cells = [
       {
+        pct: winnerPercent,
         label: `Winner (${winnerPercent}%)`,
         value: totals.winner,
         sub: undefined as string | undefined,
         cls: "bg-yellow-50 text-yellow-700",
       },
-      { label: `Burn (${feeRates.burn}%)`, value: totals.burn, sub: undefined, cls: "bg-red-50 text-red-700" },
       {
-        label: `DAO (${feeRates.dao}%)`,
-        value: totals.daoDividends,
-        sub: `${daoPerMember.toLocaleString()} ea`,
-        cls: "bg-blue-50 text-blue-700",
-      },
-      {
+        pct: feeRates.shareholder,
         label: `Shareholders (${feeRates.shareholder}%)`,
         value: totals.shareholderDividends,
         sub: `${shareholderPerMember.toLocaleString()} ea`,
         cls: "bg-green-50 text-green-700",
       },
-      { label: `Charity (${feeRates.charity}%)`, value: totals.charity, sub: undefined, cls: "bg-purple-50 text-purple-700" },
-      { label: `Fee (${feeRates.fee}%)`, value: totals.fee, sub: undefined, cls: "bg-gray-50 text-gray-700" },
-    ];
+      { pct: feeRates.burn, label: `Burn (${feeRates.burn}%)`, value: totals.burn, sub: undefined, cls: "bg-red-50 text-red-700" },
+      {
+        pct: feeRates.dao,
+        label: `DAO (${feeRates.dao}%)`,
+        value: totals.daoDividends,
+        sub: `${daoPerMember.toLocaleString()} ea`,
+        cls: "bg-blue-50 text-blue-700",
+      },
+      { pct: feeRates.charity, label: `Charity (${feeRates.charity}%)`, value: totals.charity, sub: undefined, cls: "bg-purple-50 text-purple-700" },
+      { pct: feeRates.fee, label: `Fee (${feeRates.fee}%)`, value: totals.fee, sub: undefined, cls: "bg-gray-50 text-gray-700" },
+    ].sort((a, b) => b.pct - a.pct);
 
     return { currency, totals, cells };
   });
