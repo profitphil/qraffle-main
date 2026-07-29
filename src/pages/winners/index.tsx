@@ -372,12 +372,12 @@ const EpochCard: React.FC<EpochCardProps> = ({
     {} as Record<string, number>,
   );
 
-  // Asset bundle raffles pay out in QUBIC and feed the same dividend buckets, but
-  // they get their OWN breakdown row so the QUBIC raffle row keeps its true numbers.
-  // - Succeeded raffles distribute their ticket pool (grossPoolQu) with the exact
-  //   Qu-raffle split (Burn 5 / DAO 5 / Shareholders 8 / Charity 1 / Fee 1 / ~80% creator).
-  // - Every ended raffle (succeeded or refunded) paid a 500K creation fee, split 50%
-  //   to shareholders and 50% to the DAO — added on top of the pool-derived dividends.
+  // Asset bundle raffles pay out in QUBIC. We fold only their DIVIDEND portions into
+  // the QUBIC row's Shareholders and DAO cells so members' dividend totals are correct,
+  // without touching the QUBIC raffle's own Winner/Burn/pool numbers (the ~80% creator
+  // payout is deliberately NOT shown as a "winner" — the bundle winner received assets,
+  // not Qu). Dividend sources per raffle: 8% of grossPoolQu to shareholders + 5% to DAO
+  // (succeeded only), plus a 500K creation fee split 50/50 shareholders/DAO (all ended).
   const succeededAssetGross = assetRows.reduce((sum, r) => (r.reserveMet ? sum + r.grossPoolQu : sum), 0);
   const assetCreationFees = assetRows.length * QRAFFLE_ASSET_RAFFLE_PROPOSAL_FEE;
   const assetShareholderFromFees = assetRows.reduce(
@@ -385,6 +385,9 @@ const EpochCard: React.FC<EpochCardProps> = ({
     0,
   );
   const assetDaoFromFees = assetCreationFees - assetShareholderFromFees;
+  const assetPoolSplit = calcBreakdown(succeededAssetGross, epoch);
+  const assetShareholderTotal = assetPoolSplit.shareholderDividends + assetShareholderFromFees;
+  const assetDaoTotal = assetPoolSplit.daoDividends + assetDaoFromFees;
 
   const currencyKeys = Object.keys(totalsByCurrency).sort((a, b) => {
     if (a === "QUBIC") return -1;
@@ -444,22 +447,21 @@ const EpochCard: React.FC<EpochCardProps> = ({
     return { currency, totals, cells };
   };
 
-  const currencyBreakdowns = currencyKeys.map((currency) => makeBreakdownEntry(currency, totalsByCurrency[currency] || 0));
-
-  // Asset raffles get a dedicated QU-denominated row (succeeded ticket pools + creation
-  // fees), inserted right after QUBIC so the two QU rows sit together.
-  if (assetRows.length > 0) {
-    const assetEntry = makeBreakdownEntry(
-      "Asset Raffles",
-      succeededAssetGross,
-      assetShareholderFromFees,
-      assetDaoFromFees,
-      assetCreationFees,
-    );
-    const qubicIdx = currencyBreakdowns.findIndex((e) => e.currency === "QUBIC");
-    if (qubicIdx >= 0) currencyBreakdowns.splice(qubicIdx + 1, 0, assetEntry);
-    else currencyBreakdowns.unshift(assetEntry);
+  // Ensure a QUBIC row exists to carry asset-raffle dividends even in the rare case an
+  // epoch had asset raffles but no standard Qu raffle.
+  if (assetRows.length > 0 && !currencyKeys.includes("QUBIC")) {
+    currencyKeys.unshift("QUBIC");
   }
+
+  const currencyBreakdowns = currencyKeys.map((currency) => {
+    const foldAssets = currency === "QUBIC" && assetRows.length > 0;
+    return makeBreakdownEntry(
+      currency,
+      totalsByCurrency[currency] || 0,
+      foldAssets ? assetShareholderTotal : 0,
+      foldAssets ? assetDaoTotal : 0,
+    );
+  });
 
   return (
     <div className="overflow-hidden rounded-xl border">
