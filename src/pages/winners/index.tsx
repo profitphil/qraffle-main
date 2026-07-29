@@ -227,6 +227,9 @@ const AssetRaffleStat: React.FC<{ label: string; value: number; accent?: boolean
 const AssetRaffleFeature: React.FC<{ rows: EndedAssetRaffleRow[] }> = ({ rows }) => {
   if (rows.length === 0) return null;
 
+  // Winners (reserve met) always sort above failed/refunded raffles.
+  const sortedRows = [...rows].sort((a, b) => Number(b.reserveMet) - Number(a.reserveMet));
+
   return (
     <div className="space-y-3 p-3 sm:p-4">
       <div className="flex items-center gap-2">
@@ -234,7 +237,7 @@ const AssetRaffleFeature: React.FC<{ rows: EndedAssetRaffleRow[] }> = ({ rows })
         <span className="text-foreground text-sm font-bold tracking-wide">Featured Asset Bundle Raffles</span>
       </div>
 
-      {rows.map((row) => (
+      {sortedRows.map((row) => (
         <div
           key={`asset-${row.index}`}
           className={cn(
