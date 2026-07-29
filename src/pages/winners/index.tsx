@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trophy, Crown, ChevronDown, Package, XCircle } from "lucide-react";
+import { Trophy, Crown, ChevronDown, Package, XCircle, Sparkles } from "lucide-react";
 import { tickInfoAtom } from "@/store/rpc";
 import { useRaffles } from "@/hooks/useRaffles";
 import { useEndedAssetRaffles, type EndedAssetRaffleRow } from "@/hooks/useEndedAssetRaffles";
@@ -210,63 +210,81 @@ const buildAssetRowsByEpoch = (assetRaffles: EndedAssetRaffleRow[]): Record<numb
     {} as Record<number, EndedAssetRaffleRow[]>,
   );
 
-const AssetRaffleRows: React.FC<{ rows: EndedAssetRaffleRow[] }> = ({ rows }) => {
+const AssetRaffleStat: React.FC<{ label: string; value: number; accent?: boolean }> = ({ label, value, accent }) => (
+  <div className="flex flex-col items-center rounded-lg bg-white/60 px-3 py-2 dark:bg-white/5">
+    <span className="text-muted-foreground text-[10px] font-medium uppercase tracking-wide">{label}</span>
+    <span
+      className={cn(
+        "text-sm font-bold tabular-nums",
+        accent ? "text-fuchsia-600 dark:text-fuchsia-300" : "text-foreground",
+      )}
+    >
+      {value.toLocaleString()}
+    </span>
+  </div>
+);
+
+const AssetRaffleFeature: React.FC<{ rows: EndedAssetRaffleRow[] }> = ({ rows }) => {
   if (rows.length === 0) return null;
 
   return (
-    <div className="divide-y">
-      <div className="text-muted-foreground bg-muted/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide">
-        Asset Bundle Raffles
+    <div className="space-y-3 p-3 sm:p-4">
+      <div className="flex items-center gap-2">
+        <Sparkles className="h-4 w-4 text-fuchsia-500" />
+        <span className="text-foreground text-sm font-bold tracking-wide">Featured Asset Bundle Raffles</span>
       </div>
-      {rows.map((row) => (
-        <div key={`asset-${row.index}`} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <div
-              className={cn(
-                "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-                row.reserveMet
-                  ? "bg-gradient-to-r from-purple-500 to-fuchsia-500"
-                  : "bg-muted",
-              )}
-            >
-              {row.reserveMet ? (
-                <Package className="h-4 w-4 text-white" />
-              ) : (
-                <XCircle className="text-muted-foreground h-4 w-4" />
-              )}
-            </div>
-            <div className="min-w-0">
-              <div className="text-foreground truncate text-sm font-semibold">
-                Bundle of {row.bundleSize} {row.bundleSize === 1 ? "asset" : "assets"}
-              </div>
-              {row.reserveMet ? (
-                <div className="text-muted-foreground truncate font-mono text-xs">
-                  Winner: {truncateMiddle(row.winner, 32)}
-                </div>
-              ) : (
-                <div className="text-muted-foreground truncate text-xs">Reserve not met — buyers refunded</div>
-              )}
-            </div>
-          </div>
 
-          <div className="bg-muted/40 grid grid-cols-3 gap-2 rounded-md px-3 py-2 text-center sm:flex sm:gap-4 sm:bg-transparent sm:px-0 sm:py-0">
-            <div className="sm:w-20">
-              <div className="text-muted-foreground text-[10px]">Tickets</div>
-              <div className="text-foreground text-xs font-semibold tabular-nums">
-                {row.totalTickets.toLocaleString()}
+      {rows.map((row) => (
+        <div
+          key={`asset-${row.index}`}
+          className={cn(
+            "overflow-hidden rounded-xl border p-4 shadow-sm",
+            row.reserveMet
+              ? "border-fuchsia-300/60 bg-gradient-to-br from-purple-500/10 via-fuchsia-500/10 to-pink-500/5 dark:border-fuchsia-500/30"
+              : "border-border bg-muted/30",
+          )}
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div
+                className={cn(
+                  "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl",
+                  row.reserveMet
+                    ? "bg-gradient-to-br from-purple-500 to-fuchsia-500 shadow-lg shadow-fuchsia-500/30"
+                    : "bg-muted",
+                )}
+              >
+                {row.reserveMet ? (
+                  <Package className="h-6 w-6 text-white" />
+                ) : (
+                  <XCircle className="text-muted-foreground h-6 w-6" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-foreground text-base font-bold">
+                    Bundle of {row.bundleSize} {row.bundleSize === 1 ? "asset" : "assets"}
+                  </span>
+                  {row.reserveMet && (
+                    <span className="rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow">
+                      Winner
+                    </span>
+                  )}
+                </div>
+                {row.reserveMet ? (
+                  <div className="text-muted-foreground truncate font-mono text-xs sm:text-sm">
+                    🏆 {truncateMiddle(row.winner, 40)}
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground text-xs sm:text-sm">Reserve not met — buyers refunded</div>
+                )}
               </div>
             </div>
-            <div className="sm:w-20">
-              <div className="text-muted-foreground text-[10px]">Buyers</div>
-              <div className="text-foreground text-xs font-semibold tabular-nums">
-                {row.numberOfBuyers.toLocaleString()}
-              </div>
-            </div>
-            <div className="sm:w-28">
-              <div className="text-muted-foreground text-[10px]">Pool (QU)</div>
-              <div className="text-foreground text-xs font-semibold tabular-nums">
-                {row.grossPoolQu.toLocaleString()}
-              </div>
+
+            <div className="grid grid-cols-3 gap-2 sm:w-auto sm:shrink-0">
+              <AssetRaffleStat label="Tickets" value={row.totalTickets} />
+              <AssetRaffleStat label="Buyers" value={row.numberOfBuyers} />
+              <AssetRaffleStat label="Pool (QU)" value={row.grossPoolQu} accent={row.reserveMet} />
             </div>
           </div>
         </div>
@@ -465,7 +483,13 @@ const EpochCard: React.FC<EpochCardProps> = ({
       </div>
 
       {expanded && (
-      <div className="divide-y">
+      <div>
+        {assetRows.length > 0 && (
+          <div className="border-b">
+            <AssetRaffleFeature rows={assetRows} />
+          </div>
+        )}
+        <div className="divide-y">
         <div className="hidden px-4 py-2 sm:block">
           <div className="grid grid-cols-[1fr_72px_96px_96px] gap-3 text-xs tabular-nums">
             <div />
@@ -524,7 +548,7 @@ const EpochCard: React.FC<EpochCardProps> = ({
             </div>
           </Link>
         ))}
-        <AssetRaffleRows rows={assetRows} />
+        </div>
       </div>
       )}
     </div>
