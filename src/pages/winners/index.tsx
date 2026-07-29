@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAtom } from "jotai";
-import { Trophy, Crown, ChevronDown } from "lucide-react";
 import { PageTransition, FadeInWhenVisible, StaggerChildren, StaggerItem } from "@/components/animations";
 import SEO from "@/components/SEO";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,8 +13,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Trophy, Crown, ChevronDown, Package, XCircle } from "lucide-react";
 import { tickInfoAtom } from "@/store/rpc";
 import { useRaffles } from "@/hooks/useRaffles";
+import { useEndedAssetRaffles, type EndedAssetRaffleRow } from "@/hooks/useEndedAssetRaffles";
 import { truncateMiddle } from "@/utils/base.utils";
 import { cn } from "@/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -200,6 +201,80 @@ const buildRows = (raffles: any[], maxEpoch: number): WinnerRow[] =>
     })
     .sort((a, b) => b.epoch - a.epoch);
 
+const buildAssetRowsByEpoch = (assetRaffles: EndedAssetRaffleRow[]): Record<number, EndedAssetRaffleRow[]> =>
+  assetRaffles.reduce(
+    (acc, raffle) => {
+      (acc[raffle.epoch] ||= []).push(raffle);
+      return acc;
+    },
+    {} as Record<number, EndedAssetRaffleRow[]>,
+  );
+
+const AssetRaffleRows: React.FC<{ rows: EndedAssetRaffleRow[] }> = ({ rows }) => {
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="divide-y">
+      <div className="text-muted-foreground bg-muted/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide">
+        Asset Bundle Raffles
+      </div>
+      {rows.map((row) => (
+        <div key={`asset-${row.index}`} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-4">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div
+              className={cn(
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+                row.reserveMet
+                  ? "bg-gradient-to-r from-purple-500 to-fuchsia-500"
+                  : "bg-muted",
+              )}
+            >
+              {row.reserveMet ? (
+                <Package className="h-4 w-4 text-white" />
+              ) : (
+                <XCircle className="text-muted-foreground h-4 w-4" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="text-foreground truncate text-sm font-semibold">
+                Bundle of {row.bundleSize} {row.bundleSize === 1 ? "asset" : "assets"}
+              </div>
+              {row.reserveMet ? (
+                <div className="text-muted-foreground truncate font-mono text-xs">
+                  Winner: {truncateMiddle(row.winner, 32)}
+                </div>
+              ) : (
+                <div className="text-muted-foreground truncate text-xs">Reserve not met — buyers refunded</div>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-muted/40 grid grid-cols-3 gap-2 rounded-md px-3 py-2 text-center sm:flex sm:gap-4 sm:bg-transparent sm:px-0 sm:py-0">
+            <div className="sm:w-20">
+              <div className="text-muted-foreground text-[10px]">Tickets</div>
+              <div className="text-foreground text-xs font-semibold tabular-nums">
+                {row.totalTickets.toLocaleString()}
+              </div>
+            </div>
+            <div className="sm:w-20">
+              <div className="text-muted-foreground text-[10px]">Buyers</div>
+              <div className="text-foreground text-xs font-semibold tabular-nums">
+                {row.numberOfBuyers.toLocaleString()}
+              </div>
+            </div>
+            <div className="sm:w-28">
+              <div className="text-muted-foreground text-[10px]">Pool (QU)</div>
+              <div className="text-foreground text-xs font-semibold tabular-nums">
+                {row.grossPoolQu.toLocaleString()}
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const buildDaoMembersFromSC = (raffles: any[]): Record<number, number> =>
   raffles.reduce(
     (acc, raffle: any) => {
@@ -226,6 +301,7 @@ const resolveEpochDaoRegisters = (
 type EpochCardProps = {
   epoch: number;
   epochRows: WinnerRow[];
+  assetRows?: EndedAssetRaffleRow[];
   epochDaoRegisters: number | undefined;
   daoRegisters: number;
   shareholdersCount: number;
@@ -234,6 +310,7 @@ type EpochCardProps = {
 const EpochCard: React.FC<EpochCardProps> = ({
   epoch,
   epochRows,
+  assetRows = [],
   epochDaoRegisters,
   daoRegisters,
   shareholdersCount,
@@ -447,6 +524,7 @@ const EpochCard: React.FC<EpochCardProps> = ({
             </div>
           </Link>
         ))}
+        <AssetRaffleRows rows={assetRows} />
       </div>
       )}
     </div>
@@ -473,8 +551,9 @@ const Winners: React.FC = () => {
 
   const { raffles: qraffles, isLoading: isQrafflesLoading } = useRaffles(recentStartEpoch, endEpoch, false);
   const { raffles: tokenRaffles, isLoading: isTokenRafflesLoading } = useRaffles(recentStartEpoch, endEpoch, true);
+  const { assetRaffles, isLoading: isAssetRafflesLoading } = useEndedAssetRaffles(recentStartEpoch, endEpoch);
 
-  const allLoading = isQrafflesLoading || isTokenRafflesLoading;
+  const allLoading = isQrafflesLoading || isTokenRafflesLoading || isAssetRafflesLoading;
 
   const rows = buildRows([...qraffles, ...tokenRaffles], endEpoch);
 
@@ -486,9 +565,11 @@ const Winners: React.FC = () => {
     {} as Record<number, WinnerRow[]>,
   );
 
-  const epochs = Object.keys(rowsByEpoch)
-    .map((k) => Number(k))
-    .sort((a, b) => b - a);
+  const assetRowsByEpoch = buildAssetRowsByEpoch(assetRaffles);
+
+  const epochs = Array.from(
+    new Set([...Object.keys(rowsByEpoch), ...Object.keys(assetRowsByEpoch)].map((k) => Number(k))),
+  ).sort((a, b) => b - a);
 
   // Extract numberOfDaoMembers from QuRaffle data (provided by smart contract)
   const daoMembersByEpochFromSC = buildDaoMembersFromSC(qraffles);
@@ -560,11 +641,13 @@ const Winners: React.FC = () => {
 
   const { raffles: choiceQu, isLoading: choiceQuLoading } = useRaffles(choiceStart, choiceEnd, false);
   const { raffles: choiceToken, isLoading: choiceTokenLoading } = useRaffles(choiceStart, choiceEnd, true);
+  const { assetRaffles: choiceAsset, isLoading: choiceAssetLoading } = useEndedAssetRaffles(choiceStart, choiceEnd);
 
-  const choiceLoading = choiceActive && (choiceQuLoading || choiceTokenLoading);
+  const choiceLoading = choiceActive && (choiceQuLoading || choiceTokenLoading || choiceAssetLoading);
   const choiceRows = choiceActive
     ? buildRows([...choiceQu, ...choiceToken], endEpoch).filter((r) => r.epoch === choiceEpoch)
     : [];
+  const choiceAssetRows = choiceActive ? choiceAsset.filter((r) => r.epoch === choiceEpoch) : [];
   const choiceDaoFromSC = buildDaoMembersFromSC(choiceQu);
   const choiceDaoRegisters =
     choiceActive && choiceEpoch !== null ? resolveEpochDaoRegisters(choiceEpoch, choiceDaoFromSC) : undefined;
@@ -636,6 +719,7 @@ const Winners: React.FC = () => {
                         <EpochCard
                           epoch={epoch}
                           epochRows={rowsByEpoch[epoch] || []}
+                          assetRows={assetRowsByEpoch[epoch] || []}
                           epochDaoRegisters={resolveEpochDaoRegisters(epoch, daoMembersByEpochFromSC, daoRegistersByEpoch || undefined)}
                           daoRegisters={daoRegisters}
                           shareholdersCount={SHAREHOLDERS_COUNT}
@@ -716,12 +800,13 @@ const Winners: React.FC = () => {
                     <div className="mb-4 h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                     <p className="text-muted-foreground">Loading epoch {choiceEpoch}...</p>
                   </div>
-                ) : choiceRows.length === 0 ? (
+                ) : choiceRows.length === 0 && choiceAssetRows.length === 0 ? (
                   <p className="text-muted-foreground text-sm">No completed raffles found for epoch {choiceEpoch}.</p>
                 ) : (
                   <EpochCard
                     epoch={choiceEpoch as number}
                     epochRows={choiceRows}
+                    assetRows={choiceAssetRows}
                     epochDaoRegisters={choiceDaoRegisters}
                     daoRegisters={daoRegisters}
                     shareholdersCount={SHAREHOLDERS_COUNT}
