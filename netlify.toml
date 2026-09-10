@@ -6,9 +6,6 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  # qubic-ts-library self-loads its crypto; keep it unbundled so esbuild doesn't
-  # break its asset resolution (works when required from node_modules).
-  external_node_modules = ["@qubic-lib/qubic-ts-library"]
 
   ## Uncomment to use this redirect for Single Page Applications like create-react-app.
   ## Not needed for static site generators.
