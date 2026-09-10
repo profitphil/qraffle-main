@@ -5,7 +5,9 @@
 // MUST stay dependency-light so esbuild can bundle it for the function: only web
 // standards (fetch/atob/btoa/DataView), the QubicHelper package, and the relative
 // raffleFees module. No `@/` alias, no axios, no import.meta.
-import { QubicHelper } from "@qubic-lib/qubic-ts-library/dist/qubicHelper";
+// NOTE: explicit ".js" so the import resolves when Netlify ships this package
+// externally in the function's node_modules (Node ESM requires the extension).
+import { QubicHelper } from "@qubic-lib/qubic-ts-library/dist/qubicHelper.js";
 import { getRaffleFeeRates } from "../utils/raffleFees";
 
 const RPC_URL = "https://rpc.qubic.org";
