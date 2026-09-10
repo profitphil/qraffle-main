@@ -13,6 +13,13 @@ export const QRAFFLE_REGISTER_FEE = 5; // percent
 export const QRAFFLE_FEE = 1; // percent
 export const QRAFFLE_CHARITY_FEE = 1; // percent
 export const QRAFFLE_SHRAEHOLDER_FEE = 8; // percent
+// Retained by the contract (not paid out) to buy RANDOM SC entropy for winner
+// selection. Live from epoch 228 (qubic/core PR #968); winner share drops 80% → 79%.
+export const QRAFFLE_ENTROPY_FEE = 1; // percent
+// Epoch at which burn/shareholder rates moved to 5%/8%.
+export const EPOCH_FEE_UPDATE_START = 210;
+// Epoch at which the 1% RANDOM entropy reserve took effect (winner 80% → 79%).
+export const EPOCH_ENTROPY_UPDATE_START = 228;
 export const QRAFFLE_MAX_EPOCH = 65536;
 export const QRAFFLE_MAX_PROPOSAL_EPOCH = 128;
 export const QRAFFLE_MAX_MEMBER = 65536;

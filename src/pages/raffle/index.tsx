@@ -14,13 +14,7 @@ import { useQubicConnect } from "@/components/connect/QubicConnectContext";
 import { getAnalytics } from "@/services/sc.service";
 import { useQuery } from "@tanstack/react-query";
 import { useRaffleParticipants } from "@/hooks/useRaffleParticipants";
-import {
-  QRAFFLE_BURN_FEE,
-  QRAFFLE_CHARITY_FEE,
-  QRAFFLE_FEE,
-  QRAFFLE_REGISTER_FEE,
-  QRAFFLE_SHRAEHOLDER_FEE,
-} from "@/utils/constants";
+import { getRaffleFeeRates } from "@/utils/raffleFees";
 import { useTxMonitor } from "@/store/txMonitor";
 import { hasParticipated } from "@/utils/participationStorage";
 
@@ -169,8 +163,9 @@ const RaffleDetailPage: React.FC = () => {
     );
   }
 
+  const feeRates = getRaffleFeeRates(raffle.epoch);
   const rewardPercent =
-    100 - QRAFFLE_BURN_FEE - QRAFFLE_REGISTER_FEE - QRAFFLE_SHRAEHOLDER_FEE - QRAFFLE_CHARITY_FEE - QRAFFLE_FEE;
+    100 - feeRates.burn - feeRates.dao - feeRates.shareholder - feeRates.charity - feeRates.fee - feeRates.entropy;
 
   let entryAmount = 0;
   let tokenName = "QUBIC";
@@ -204,12 +199,16 @@ const RaffleDetailPage: React.FC = () => {
       ? Math.max(members, joinStartMembersRef.current + optimisticMemberBoost)
       : members;
   const displayTotalPool = Math.floor(entryAmount * displayMembers);
-  const burn = Math.floor((displayTotalPool * QRAFFLE_BURN_FEE) / 100);
-  const daoDividends = Math.floor((displayTotalPool * QRAFFLE_REGISTER_FEE) / 100);
-  const shareholderDividends = Math.floor((displayTotalPool * QRAFFLE_SHRAEHOLDER_FEE) / 100);
-  const charity = Math.floor((displayTotalPool * QRAFFLE_CHARITY_FEE) / 100);
-  const fee = Math.floor((displayTotalPool * QRAFFLE_FEE) / 100);
-  const prizePool = Math.max(0, displayTotalPool - burn - daoDividends - shareholderDividends - charity - fee);
+  const burn = Math.floor((displayTotalPool * feeRates.burn) / 100);
+  const daoDividends = Math.floor((displayTotalPool * feeRates.dao) / 100);
+  const shareholderDividends = Math.floor((displayTotalPool * feeRates.shareholder) / 100);
+  const charity = Math.floor((displayTotalPool * feeRates.charity) / 100);
+  const fee = Math.floor((displayTotalPool * feeRates.fee) / 100);
+  const entropy = Math.floor((displayTotalPool * feeRates.entropy) / 100);
+  const prizePool = Math.max(
+    0,
+    displayTotalPool - burn - daoDividends - shareholderDividends - charity - fee - entropy,
+  );
 
   const handleParticipate = async () => {
     if (!wallet) {
@@ -316,7 +315,7 @@ const RaffleDetailPage: React.FC = () => {
                 </div>
                 <div className="inline-flex items-center space-x-2 rounded-full bg-slate-100/20 px-3 py-1">
                   <Gift className="h-4 w-4" />
-                  <span className="text-sm">80% Prize Pool</span>
+                  <span className="text-sm">{rewardPercent}% Prize Pool</span>
                 </div>
                 {!isCurrentEpoch && (
                   <div className="inline-flex items-center space-x-2 rounded-full bg-green-500/20 px-3 py-1">
@@ -604,11 +603,11 @@ const RaffleDetailPage: React.FC = () => {
                         <div className="mt-3 space-y-2 text-xs">
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Prize Pool:</span>
-                            <span className="text-foreground font-medium">80%</span>
+                            <span className="text-foreground font-medium">{rewardPercent}%</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Fees:</span>
-                            <span className="text-foreground font-medium">20%</span>
+                            <span className="text-foreground font-medium">{100 - rewardPercent}%</span>
                           </div>
                         </div>
                       </div>
@@ -684,7 +683,7 @@ const RaffleDetailPage: React.FC = () => {
                         <span className="text-muted-foreground text-sm">Burned:</span>
                         <span className="text-error-40 font-medium">{burn.toLocaleString()} {tokenName}</span>
                       </div>
-                      <div className="text-muted-foreground mt-1 text-xs">{QRAFFLE_BURN_FEE}%</div>
+                      <div className="text-muted-foreground mt-1 text-xs">{feeRates.burn}%</div>
                     </div>
                   </StaggerItem>
                   <StaggerItem>
@@ -693,7 +692,7 @@ const RaffleDetailPage: React.FC = () => {
                         <span className="text-muted-foreground text-sm">DAO Members:</span>
                         <span className="text-primary font-medium">{daoDividends.toLocaleString()} {tokenName}</span>
                       </div>
-                      <div className="text-muted-foreground mt-1 text-xs">{QRAFFLE_REGISTER_FEE}%</div>
+                      <div className="text-muted-foreground mt-1 text-xs">{feeRates.dao}%</div>
                     </div>
                   </StaggerItem>
                   <StaggerItem>
@@ -702,7 +701,7 @@ const RaffleDetailPage: React.FC = () => {
                         <span className="text-muted-foreground text-sm">Shareholders:</span>
                         <span className="font-medium text-[#47CD89]">{shareholderDividends.toLocaleString()} {tokenName}</span>
                       </div>
-                      <div className="text-muted-foreground mt-1 text-xs">{QRAFFLE_SHRAEHOLDER_FEE}%</div>
+                      <div className="text-muted-foreground mt-1 text-xs">{feeRates.shareholder}%</div>
                     </div>
                   </StaggerItem>
                   <StaggerItem>
@@ -711,7 +710,7 @@ const RaffleDetailPage: React.FC = () => {
                         <span className="text-muted-foreground text-sm">Dev Fees:</span>
                         <span className="text-muted-foreground font-medium">{fee.toLocaleString()} {tokenName}</span>
                       </div>
-                      <div className="text-muted-foreground mt-1 text-xs">{QRAFFLE_FEE}%</div>
+                      <div className="text-muted-foreground mt-1 text-xs">{feeRates.fee}%</div>
                     </div>
                   </StaggerItem>
                   <StaggerItem>
@@ -720,13 +719,26 @@ const RaffleDetailPage: React.FC = () => {
                         <span className="text-muted-foreground text-sm">Qubic Charity Fund:</span>
                         <span className="font-medium text-[#8B5CF6]">{charity.toLocaleString()} {tokenName}</span>
                       </div>
-                      <div className="text-muted-foreground mt-1 text-xs">{QRAFFLE_CHARITY_FEE}%</div>
+                      <div className="text-muted-foreground mt-1 text-xs">{feeRates.charity}%</div>
                     </div>
                   </StaggerItem>
+                  {feeRates.entropy > 0 && (
+                    <StaggerItem>
+                      <div className="transform rounded-lg bg-[#06B6D4]/10 p-4 transition-all duration-300 hover:scale-105">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground text-sm">Entropy Reserve:</span>
+                          <span className="font-medium text-[#06B6D4]">{entropy.toLocaleString()} {tokenName}</span>
+                        </div>
+                        <div className="text-muted-foreground mt-1 text-xs">
+                          {feeRates.entropy}% — buys RANDOM SC entropy
+                        </div>
+                      </div>
+                    </StaggerItem>
+                  )}
                 </StaggerChildren>
                 <div className="bg-primary/5 mt-4 rounded-lg p-4">
                   <p className="text-muted-foreground text-sm">
-                    <strong>Total Fees: 20%</strong> • Prize Pool: 80% •
+                    <strong>Total Fees: {100 - rewardPercent}%</strong> • Prize Pool: {rewardPercent}% •
                     {raffle.type === "standard"
                       ? " Standard QUBIC Raffle with dynamic entry amounts"
                       : " Token Raffle from community proposal"}

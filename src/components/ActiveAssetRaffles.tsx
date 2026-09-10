@@ -22,7 +22,7 @@ import { truncateMiddle } from "@/utils";
 import { QRAFFLE_MAX_TICKETS_PER_BUYER } from "@/utils/constants";
 
 // The reserve is met when gross ticket revenue reaches 125% of the reserve
-// price (creator receives 80% of gross).
+// price (creator receives 79% of gross).
 const reserveProgressPercent = (raffle: ActiveAssetRaffle) => {
   const requiredGross = Math.ceil((raffle.reservePriceQu * 100) / 80);
   if (requiredGross <= 0) return 100;

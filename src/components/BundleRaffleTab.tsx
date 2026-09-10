@@ -59,7 +59,7 @@ const BundleRaffleTab: React.FC<BundleRaffleTabProps> = ({ isRegistered }) => {
             </h3>
             <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
               Raffle a bundle of asset shares against QUBIC tickets with a reserve price of your choosing. If the
-              reserve is met at epoch end, one weighted-random ticket holder wins the bundle and you receive 80% of
+              reserve is met at epoch end, one weighted-random ticket holder wins the bundle and you receive 79% of
               ticket sales; otherwise everyone is refunded and the bundle returns to you.
             </p>
           </div>

@@ -24,14 +24,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getAnalytics } from "@/services/sc.service";
 import { fetchArchiverStatus, fetchEpochTicks, fetchTxHistory } from "@/services/rpc.service";
 import { QubicHelper } from "@qubic-lib/qubic-ts-library/dist/qubicHelper";
-import {
-  QRAFFLE_ASSET_RAFFLE_PROPOSAL_FEE,
-  QRAFFLE_BURN_FEE,
-  QRAFFLE_CHARITY_FEE,
-  QRAFFLE_FEE,
-  QRAFFLE_REGISTER_FEE,
-  QRAFFLE_SHRAEHOLDER_FEE,
-} from "@/utils/constants";
+import { QRAFFLE_ASSET_RAFFLE_PROPOSAL_FEE } from "@/utils/constants";
+import { getRaffleFeeRates } from "@/utils/raffleFees";
 
 type WinnerRow = {
   key: string;
@@ -52,6 +46,7 @@ type EpochTotals = {
   shareholderDividends: number;
   charity: number;
   fee: number;
+  entropy: number;
   winner: number;
 };
 
@@ -71,29 +66,15 @@ const DAO_REGISTERS_OVERRIDE_BY_EPOCH: Record<number, number> = {
   202: 72,
 };
 
-const EPOCH_FEE_UPDATE_START = 210;
-
-const getFeeRatesForEpoch = (epoch: number) => {
-  const burn = epoch >= EPOCH_FEE_UPDATE_START ? 5 : QRAFFLE_BURN_FEE;
-  const shareholder = epoch >= EPOCH_FEE_UPDATE_START ? 8 : QRAFFLE_SHRAEHOLDER_FEE;
-
-  return {
-    burn,
-    dao: QRAFFLE_REGISTER_FEE,
-    shareholder,
-    charity: QRAFFLE_CHARITY_FEE,
-    fee: QRAFFLE_FEE,
-  };
-};
-
 const calcBreakdown = (totalEntries: number, epoch: number): EpochTotals => {
-  const rates = getFeeRatesForEpoch(epoch);
+  const rates = getRaffleFeeRates(epoch);
   const burn = Math.floor((totalEntries * rates.burn) / 100);
   const daoDividends = Math.floor((totalEntries * rates.dao) / 100);
   const shareholderDividends = Math.floor((totalEntries * rates.shareholder) / 100);
   const charity = Math.floor((totalEntries * rates.charity) / 100);
   const fee = Math.floor((totalEntries * rates.fee) / 100);
-  const winner = Math.max(0, totalEntries - burn - daoDividends - shareholderDividends - charity - fee);
+  const entropy = Math.floor((totalEntries * rates.entropy) / 100);
+  const winner = Math.max(0, totalEntries - burn - daoDividends - shareholderDividends - charity - fee - entropy);
 
   return {
     totalEntries,
@@ -102,6 +83,7 @@ const calcBreakdown = (totalEntries: number, epoch: number): EpochTotals => {
     shareholderDividends,
     charity,
     fee,
+    entropy,
     winner,
   };
 };
@@ -361,8 +343,9 @@ const EpochCard: React.FC<EpochCardProps> = ({
   const [expanded, setExpanded] = useState(false);
   const toggle = () => setExpanded((v) => !v);
 
-  const feeRates = getFeeRatesForEpoch(epoch);
-  const winnerPercent = 100 - feeRates.burn - feeRates.dao - feeRates.shareholder - feeRates.charity - feeRates.fee;
+  const feeRates = getRaffleFeeRates(epoch);
+  const winnerPercent =
+    100 - feeRates.burn - feeRates.dao - feeRates.shareholder - feeRates.charity - feeRates.fee - feeRates.entropy;
 
   const totalsByCurrency = epochRows.reduce(
     (acc, row) => {
@@ -374,7 +357,7 @@ const EpochCard: React.FC<EpochCardProps> = ({
 
   // Asset bundle raffles pay out in QUBIC. We fold only their DIVIDEND portions into
   // the QUBIC row's Shareholders and DAO cells so members' dividend totals are correct,
-  // without touching the QUBIC raffle's own Winner/Burn/pool numbers (the ~80% creator
+  // without touching the QUBIC raffle's own Winner/Burn/pool numbers (the ~79-80% creator
   // payout is deliberately NOT shown as a "winner" — the bundle winner received assets,
   // not Qu). Dividend sources per raffle: 8% of grossPoolQu to shareholders + 5% to DAO
   // (succeeded only), plus a 500K creation fee split 50/50 shareholders/DAO (all ended).
@@ -442,6 +425,17 @@ const EpochCard: React.FC<EpochCardProps> = ({
       },
       { pct: feeRates.charity, label: `Charity (${feeRates.charity}%)`, value: totals.charity, sub: undefined, cls: "bg-purple-50 text-purple-700" },
       { pct: feeRates.fee, label: `Fee (${feeRates.fee}%)`, value: totals.fee, sub: undefined, cls: "bg-gray-50 text-gray-700" },
+      ...(feeRates.entropy > 0
+        ? [
+            {
+              pct: feeRates.entropy,
+              label: `Entropy (${feeRates.entropy}%)`,
+              value: totals.entropy,
+              sub: undefined as string | undefined,
+              cls: "bg-cyan-50 text-cyan-700",
+            },
+          ]
+        : []),
     ].sort((a, b) => b.pct - a.pct);
 
     return { currency, totals, cells };
@@ -462,6 +456,11 @@ const EpochCard: React.FC<EpochCardProps> = ({
       foldAssets ? assetDaoTotal : 0,
     );
   });
+
+  // Breakdown gains an Entropy column from epoch 228, so column count varies (7 or 8).
+  const breakdownColumnCount = (currencyBreakdowns[0]?.cells.length ?? 6) + 1;
+  const breakdownGridStyle = { gridTemplateColumns: `repeat(${breakdownColumnCount}, minmax(0, 1fr))` };
+  const breakdownMinWidthStyle = { minWidth: `${breakdownColumnCount * 104}px` };
 
   return (
     <div className="overflow-hidden rounded-xl border">
@@ -493,8 +492,8 @@ const EpochCard: React.FC<EpochCardProps> = ({
 
         <div className="flex flex-col gap-2">
           <div className="hidden w-full max-w-full overflow-x-auto sm:block">
-            <div className="min-w-[720px]">
-              <div className="grid grid-cols-7 gap-2 text-xs leading-tight">
+            <div style={breakdownMinWidthStyle}>
+              <div className="grid gap-2 text-xs leading-tight" style={breakdownGridStyle}>
                 <div className="flex min-h-8 items-center justify-center rounded-md bg-muted px-2 py-1 text-center text-foreground">
                   <div className="font-semibold">Currency</div>
                 </div>
@@ -510,7 +509,7 @@ const EpochCard: React.FC<EpochCardProps> = ({
 
               <div className="mt-2 grid gap-2">
                 {currencyBreakdowns.map(({ currency, totals, cells }) => (
-                  <div key={currency} className="grid grid-cols-7 gap-2 text-xs leading-tight">
+                  <div key={currency} className="grid gap-2 text-xs leading-tight" style={breakdownGridStyle}>
                     <div className="flex min-h-10 flex-col items-center justify-center rounded-md bg-muted px-2 py-1.5 text-center text-foreground">
                       <div className="font-semibold">{currency}</div>
                       <div className="text-muted-foreground">{totals.totalEntries.toLocaleString()}</div>

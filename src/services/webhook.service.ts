@@ -1,11 +1,5 @@
 import { truncateMiddle } from "@/utils/base.utils";
-import {
-  QRAFFLE_BURN_FEE,
-  QRAFFLE_CHARITY_FEE,
-  QRAFFLE_FEE,
-  QRAFFLE_REGISTER_FEE,
-  QRAFFLE_SHRAEHOLDER_FEE,
-} from "@/utils/constants";
+import { getRaffleFeeRates } from "@/utils/raffleFees";
 import {
   getEndedQuRaffle,
   getEndedTokenRaffle,
@@ -20,7 +14,6 @@ const DISCORD_DIVIDENDS_WEBHOOK_URL =
   "https://discord.com/api/webhooks/1486176089331077130/FuS15TgB06KhZoHTOeUCn-kAKuPTcRpWtf654NGAxoNGAYQBwQWAI0RZdTHFu02LE9dc";
 const SHAREHOLDER_COUNT = 676;
 const EMBED_DESCRIPTION_MAX_LENGTH = 3500;
-const EPOCH_FEE_UPDATE_START = 210;
 
 export type TokenRaffleWithIndex = TokenRaffle & { tokenRaffleIndex: number };
 
@@ -109,27 +102,17 @@ const formatNumber = (value: number | undefined) => {
   return value.toLocaleString();
 };
 
-const getFeeRatesForEpoch = (epoch: number) => {
-  const burn = epoch >= EPOCH_FEE_UPDATE_START ? 5 : QRAFFLE_BURN_FEE;
-  const shareholders = epoch >= EPOCH_FEE_UPDATE_START ? 8 : QRAFFLE_SHRAEHOLDER_FEE;
-
-  return {
-    burn,
-    dao: QRAFFLE_REGISTER_FEE,
-    shareholders,
-    charity: QRAFFLE_CHARITY_FEE,
-    fee: QRAFFLE_FEE,
-  };
-};
+const getFeeRatesForEpoch = getRaffleFeeRates;
 
 const calculateDividendBreakdown = (totalEntries: number, epoch: number) => {
   const rates = getFeeRatesForEpoch(epoch);
   const burn = Math.floor((totalEntries * rates.burn) / 100);
   const dao = Math.floor((totalEntries * rates.dao) / 100);
-  const shareholders = Math.floor((totalEntries * rates.shareholders) / 100);
+  const shareholders = Math.floor((totalEntries * rates.shareholder) / 100);
   const charity = Math.floor((totalEntries * rates.charity) / 100);
   const fee = Math.floor((totalEntries * rates.fee) / 100);
-  const winner = Math.max(0, totalEntries - burn - dao - shareholders - charity - fee);
+  const entropy = Math.floor((totalEntries * rates.entropy) / 100);
+  const winner = Math.max(0, totalEntries - burn - dao - shareholders - charity - fee - entropy);
 
   return {
     totalEntries,
@@ -138,6 +121,7 @@ const calculateDividendBreakdown = (totalEntries: number, epoch: number) => {
     shareholders,
     charity,
     fee,
+    entropy,
     winner,
   };
 };
@@ -148,7 +132,7 @@ const buildDividendEmbedFields = (
   options?: { daoMembers?: number; includePerMember?: boolean },
 ) => {
   const rates = getFeeRatesForEpoch(epoch);
-  const winnerPercent = 100 - rates.burn - rates.dao - rates.shareholders - rates.charity - rates.fee;
+  const winnerPercent = 100 - rates.burn - rates.dao - rates.shareholder - rates.charity - rates.fee - rates.entropy;
   const daoMembers = Math.max(0, options?.daoMembers ?? 0);
   const daoPerMember = daoMembers > 0 ? Math.floor(breakdown.dao / daoMembers) : 0;
   const shareholderPerMember = SHAREHOLDER_COUNT > 0 ? Math.floor(breakdown.shareholders / SHAREHOLDER_COUNT) : 0;
@@ -178,7 +162,7 @@ const buildDividendEmbedFields = (
       inline: true,
     },
     {
-      name: `Shareholders (${rates.shareholders}%)`,
+      name: `Shareholders (${rates.shareholder}%)`,
       value:
         options?.includePerMember
           ? `${formatNumber(breakdown.shareholders)}\n${formatNumber(shareholderPerMember)} ea`
@@ -195,6 +179,15 @@ const buildDividendEmbedFields = (
       value: formatNumber(breakdown.fee),
       inline: true,
     },
+    ...(rates.entropy > 0
+      ? [
+          {
+            name: `Entropy (${rates.entropy}%)`,
+            value: formatNumber(breakdown.entropy),
+            inline: true,
+          },
+        ]
+      : []),
   ];
 };
 
@@ -282,9 +275,10 @@ const buildEmbeds = (payload: EpochWinnersPayload) => {
       100 -
       getFeeRatesForEpoch(payload.epoch).burn -
       getFeeRatesForEpoch(payload.epoch).dao -
-      getFeeRatesForEpoch(payload.epoch).shareholders -
+      getFeeRatesForEpoch(payload.epoch).shareholder -
       getFeeRatesForEpoch(payload.epoch).charity -
-      getFeeRatesForEpoch(payload.epoch).fee;
+      getFeeRatesForEpoch(payload.epoch).fee -
+      getFeeRatesForEpoch(payload.epoch).entropy;
 
     const tokenBlocks = payload.tokenRaffles.map((raffle, index) => {
       const totalEntriesAmount = Number(raffle.entryAmount) * Number(raffle.numberOfMembers || 0);
@@ -319,7 +313,8 @@ const buildContent = (payload: EpochWinnersPayload) => `Epoch (${payload.epoch})
 const buildDividendEmbeds = (payload: EpochWinnersPayload) => {
   const embeds: Array<Record<string, unknown>> = [];
   const feeRates = getFeeRatesForEpoch(payload.epoch);
-  const winnerPercent = 100 - feeRates.burn - feeRates.dao - feeRates.shareholders - feeRates.charity - feeRates.fee;
+  const winnerPercent =
+    100 - feeRates.burn - feeRates.dao - feeRates.shareholder - feeRates.charity - feeRates.fee - feeRates.entropy;
 
   const daoMembers = payload.standardRaffle?.numberOfDaoMembers ?? 0;
 
@@ -350,9 +345,10 @@ const buildDividendEmbeds = (payload: EpochWinnersPayload) => {
           `Winner (${winnerPercent}%): ${formatNumber(breakdown.winner)}`,
           `Burn (${feeRates.burn}%): ${formatNumber(breakdown.burn)}`,
           `DAO (${feeRates.dao}%): ${formatNumber(breakdown.dao)}${daoMembers > 0 ? ` (${formatNumber(daoPerMember)} ea)` : ""}`,
-          `Shareholders (${feeRates.shareholders}%): ${formatNumber(breakdown.shareholders)} (${formatNumber(shareholderPerMember)} ea)`,
+          `Shareholders (${feeRates.shareholder}%): ${formatNumber(breakdown.shareholders)} (${formatNumber(shareholderPerMember)} ea)`,
           `Charity (${feeRates.charity}%): ${formatNumber(breakdown.charity)}`,
           `Platform (${feeRates.fee}%): ${formatNumber(breakdown.fee)}`,
+          ...(feeRates.entropy > 0 ? [`Entropy (${feeRates.entropy}%): ${formatNumber(breakdown.entropy)}`] : []),
         ].join("\n"),
       );
     }

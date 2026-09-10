@@ -95,7 +95,7 @@ const Home: React.FC = () => {
               <StaggerItem>
                 <div className="bg-card flex items-center space-x-2 rounded-full px-4 py-2 shadow-md">
                   <Flame className="text-error-40 h-4 w-4" />
-                  <span>20% Fee Distribution</span>
+                  <span>21% Fee Distribution</span>
                 </div>
               </StaggerItem>
               <StaggerItem>

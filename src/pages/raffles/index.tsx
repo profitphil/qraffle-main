@@ -13,13 +13,7 @@ import { tickInfoAtom } from "@/store/rpc";
 import { useRaffles } from "@/hooks/useRaffles";
 import { getAnalytics } from "@/services/sc.service";
 import { useQuery } from "@tanstack/react-query";
-import {
-  QRAFFLE_BURN_FEE,
-  QRAFFLE_FEE,
-  QRAFFLE_CHARITY_FEE,
-  QRAFFLE_REGISTER_FEE,
-  QRAFFLE_SHRAEHOLDER_FEE,
-} from "@/utils/constants";
+import { getWinnerPercent } from "@/utils/raffleFees";
 
 const Raffles: React.FC = () => {
   const [tickInfo] = useAtom(tickInfoAtom);
@@ -231,29 +225,21 @@ const Raffles: React.FC = () => {
 
                                   <div className="my-2 rounded-lg bg-gradient-to-r from-[#374151]/60 to-[#4B5563]/60 px-2 py-1">
                                     <div className="text-center">
-                                      <div className="mb-1 text-xs text-[#9CA3AF]">Prize Pool (80%)</div>
+                                      <div className="mb-1 text-xs text-[#9CA3AF]">
+                                        Prize Pool ({getWinnerPercent(tickInfo.epoch)}%)
+                                      </div>
                                       <div className="text-sm font-bold text-[#F3F4F6]">
                                         {raffle.type == "standard"
                                           ? (
                                               ((analytics?.currentQuRaffleAmount || 0) *
                                                 (analytics?.numberOfQuRaffleMembers || 0) *
-                                                (100 -
-                                                  QRAFFLE_BURN_FEE -
-                                                  QRAFFLE_REGISTER_FEE -
-                                                  QRAFFLE_SHRAEHOLDER_FEE -
-                                                  QRAFFLE_CHARITY_FEE -
-                                                  QRAFFLE_FEE)) /
+                                                getWinnerPercent(tickInfo.epoch)) /
                                               100
                                             ).toLocaleString()
                                           : (
                                               ((Number(raffle.entryAmount) || 0) *
                                                 (Number(raffle.numberOfMembers) || 0) *
-                                                (100 -
-                                                  QRAFFLE_BURN_FEE -
-                                                  QRAFFLE_REGISTER_FEE -
-                                                  QRAFFLE_SHRAEHOLDER_FEE -
-                                                  QRAFFLE_CHARITY_FEE -
-                                                  QRAFFLE_FEE)) /
+                                                getWinnerPercent(tickInfo.epoch)) /
                                               100
                                             ).toLocaleString()}
                                       </div>

@@ -76,7 +76,7 @@ const CreateAssetRaffleModal: React.FC<CreateAssetRaffleModalProps> = ({ open, o
     ticketPriceValid &&
     !isSubmitting;
 
-  // Gross ticket revenue must reach 125% of the reserve (creator receives 80%).
+  // Gross ticket revenue must reach 125% of the reserve (creator receives 79%).
   const requiredGross = Math.ceil((reservePriceNum * 100) / 80);
   const minTicketsToMeetReserve = ticketPriceNum > 0 ? Math.ceil(requiredGross / ticketPriceNum) : 0;
 
@@ -206,7 +206,7 @@ const CreateAssetRaffleModal: React.FC<CreateAssetRaffleModalProps> = ({ open, o
               className="h-10"
             />
             <p className="text-muted-foreground text-xs">
-              The amount you want after the 20% fee split. Ticket sales must gross at least 125% of this or everyone
+              The amount you want after the 21% fee split. Ticket sales must gross at least 125% of this or everyone
               is refunded.
             </p>
           </div>
@@ -251,7 +251,7 @@ const CreateAssetRaffleModal: React.FC<CreateAssetRaffleModalProps> = ({ open, o
                   <li>• You must be a registered DAO member to create a raffle</li>
                   <li>• Max {QRAFFLE_MAX_ASSET_RAFFLES_PER_CREATOR} raffles per creator per epoch</li>
                   <li>• Bundle assets are escrowed by the contract until epoch end</li>
-                  <li>• If the reserve is met, you receive 80% of ticket sales; the winner gets the bundle</li>
+                  <li>• If the reserve is met, you receive 79% of ticket sales; the winner gets the bundle</li>
                   <li>• You can cancel (bundle returned, fee not refunded) only while there are no buyers</li>
                 </ul>
               </div>

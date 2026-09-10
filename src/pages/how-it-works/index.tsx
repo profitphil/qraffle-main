@@ -179,7 +179,7 @@ const HowItWorks: React.FC = () => {
               <StaggerChildren staggerDelay={0.1} className="grid gap-6 md:grid-cols-3">
                 <StaggerItem>
                   <div className="bg-success-90 transform rounded-lg p-4 text-center transition-all duration-300 hover:scale-105">
-                    <div className="text-success-40 mb-2 text-2xl font-bold">80%</div>
+                    <div className="text-success-40 mb-2 text-2xl font-bold">79%</div>
                     <div className="text-foreground mb-1 text-sm font-medium">Prize Pool</div>
                     <div className="text-muted-foreground text-xs">Full prize amount to winner</div>
                   </div>
@@ -218,7 +218,7 @@ const HowItWorks: React.FC = () => {
                     <div className="text-foreground mb-1 text-sm font-medium">Qubic Charity Fund</div>
                     <div className="text-muted-foreground text-xs">
                       Donated to{" "}
-                      <a 
+                      <a
                         href="https://discord.com/channels/768887649540243497/1446203919209599199"
                         target="_blank"
                         rel="noopener noreferrer"
@@ -226,6 +226,15 @@ const HowItWorks: React.FC = () => {
                       >
                         Qubic Charity
                       </a>
+                    </div>
+                  </div>
+                </StaggerItem>
+                <StaggerItem>
+                  <div className="transform rounded-lg bg-[#06B6D4]/10 p-4 text-center transition-all duration-300 hover:scale-105">
+                    <div className="mb-2 text-2xl font-bold text-[#06B6D4]">1%</div>
+                    <div className="text-foreground mb-1 text-sm font-medium">Entropy Reserve</div>
+                    <div className="text-muted-foreground text-xs">
+                      Buys verifiable randomness from the RANDOM smart contract for winner selection
                     </div>
                   </div>
                 </StaggerItem>
