@@ -15,11 +15,11 @@ const SC_INDEX = 19;
 const SHAREHOLDER_COUNT = 676;
 const EMBED_DESCRIPTION_MAX_LENGTH = 3500;
 
-// These Discord webhook URLs are already public (they shipped in the client bundle).
+// Discord webhook URLs (updated 2026-09-27).
 export const DISCORD_WINNERS_WEBHOOK_URL =
-  "https://discord.com/api/webhooks/1486175897307447428/TCg6hiqTKZnqGZV7k9y5FeEDHS0G5sUWXq-szQawpSF6xafTrLUQOQwnADaIvbZQvchr";
+  "https://discord.com/api/webhooks/1553913460012621855/XAocSp3DD60M2L-J_TTcyqlhl7wO4T4pvV_LLYgLXCeq0bVXZ2CdfHCSo8O8GRWDOEbx";
 export const DISCORD_DIVIDENDS_WEBHOOK_URL =
-  "https://discord.com/api/webhooks/1486176089331077130/FuS15TgB06KhZoHTOeUCn-kAKuPTcRpWtf654NGAxoNGAYQBwQWAI0RZdTHFu02LE9dc";
+  "https://discord.com/api/webhooks/1553913047574388838/dEa_AQgm_IPtbGQ-8DdYHjNmdrXgd9x9sIBxNFbpgZ9MlQleAIcIzf2-_obM1HGd48RV";
 
 const qHelper = new QubicHelper();
 
