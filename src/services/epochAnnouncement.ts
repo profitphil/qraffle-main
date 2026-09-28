@@ -80,8 +80,31 @@ const assetNameFromBig = (raw: bigint): string => {
 };
 
 // ── smart-contract reads (mirror sc.service.ts offsets) ───────────────────────
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// The public RPC intermittently returns 500/429; retry transient failures so a
+// single hiccup doesn't abort an announcement (matters for the weekly scheduled run).
+const fetchWithRetry = async (url: string, init?: RequestInit, attempts = 4): Promise<Response> => {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      const res = await fetch(url, init);
+      if (res.ok) return res;
+      if (res.status >= 500 || res.status === 429) {
+        lastError = new Error(`HTTP ${res.status}`);
+      } else {
+        return res; // non-retryable (4xx) — hand back for the caller to handle
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < attempts - 1) await sleep(600 * (attempt + 1));
+  }
+  throw lastError instanceof Error ? lastError : new Error(`fetch failed: ${url}`);
+};
+
 const querySC = async (inputType: number, requestData = "", inputSize = 0): Promise<Uint8Array | null> => {
-  const res = await fetch(`${RPC_URL}/live/v1/querySmartContract`, {
+  const res = await fetchWithRetry(`${RPC_URL}/live/v1/querySmartContract`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ contractIndex: SC_INDEX, inputType, inputSize, requestData }),
@@ -96,7 +119,7 @@ const getId = (bytes: Uint8Array, offset: number): Promise<string> =>
   qHelper.getIdentity(bytes.slice(offset, offset + 32));
 
 export const fetchCurrentEpoch = async (): Promise<number> => {
-  const res = await fetch(`${RPC_URL}/live/v1/tick-info`);
+  const res = await fetchWithRetry(`${RPC_URL}/live/v1/tick-info`);
   if (!res.ok) throw new Error(`tick-info → HTTP ${res.status}`);
   const json = (await res.json()) as { tickInfo?: { epoch?: number } };
   const epoch = json.tickInfo?.epoch;
