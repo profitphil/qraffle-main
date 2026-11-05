@@ -2,5 +2,8 @@ node_modules
 
 # Local Netlify folder
 .netlify
+.env
+.env.*
+!.env.example
 .env.local
 dist/

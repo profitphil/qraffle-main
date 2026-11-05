@@ -15,11 +15,17 @@ const SC_INDEX = 19;
 const SHAREHOLDER_COUNT = 676;
 const EMBED_DESCRIPTION_MAX_LENGTH = 3500;
 
-// Discord webhook URLs (updated 2026-09-27).
-export const DISCORD_WINNERS_WEBHOOK_URL =
-  "https://discord.com/api/webhooks/1553913460012621855/XAocSp3DD60M2L-J_TTcyqlhl7wO4T4pvV_LLYgLXCeq0bVXZ2CdfHCSo8O8GRWDOEbx";
-export const DISCORD_DIVIDENDS_WEBHOOK_URL =
-  "https://discord.com/api/webhooks/1553913047574388838/dEa_AQgm_IPtbGQ-8DdYHjNmdrXgd9x9sIBxNFbpgZ9MlQleAIcIzf2-_obM1HGd48RV";
+// Discord webhook URLs are credentials: anyone holding the URL can post to the
+// channel. They are read from the environment (Netlify -> Site configuration ->
+// Environment variables) and must never be committed. See .env.example.
+type WebhookEnvName = "DISCORD_WINNERS_WEBHOOK_URL" | "DISCORD_DIVIDENDS_WEBHOOK_URL";
+
+const webhookUrl = (name: WebhookEnvName): string => {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  const url = env?.[name];
+  if (!url) throw new Error(`${name} is not set`);
+  return url;
+};
 
 const qHelper = new QubicHelper();
 
@@ -390,13 +396,17 @@ export const announceEpoch = async (epoch: number, options?: { dryRun?: boolean 
 
   if (dryRun) return { epoch, posted: false, dryRun: true, winnersEmbeds, dividendEmbeds };
 
-  await postToDiscord(DISCORD_WINNERS_WEBHOOK_URL, {
+  // Resolve both before posting either, so a missing variable can't leave half an announcement.
+  const winnersUrl = webhookUrl("DISCORD_WINNERS_WEBHOOK_URL");
+  const dividendsUrl = webhookUrl("DISCORD_DIVIDENDS_WEBHOOK_URL");
+
+  await postToDiscord(winnersUrl, {
     username: "Qraffle Epoch Bot",
     content: `Epoch (${epoch}) has ended! 🎉`,
     embeds: winnersEmbeds,
     allowed_mentions: { parse: [] },
   });
-  await postToDiscord(DISCORD_DIVIDENDS_WEBHOOK_URL, {
+  await postToDiscord(dividendsUrl, {
     username: "Qraffle Dividend Bot",
     content: `Epoch (${epoch}) dividend distribution 💸`,
     embeds: dividendEmbeds,
